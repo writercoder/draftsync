@@ -57,10 +57,10 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/yourusername/draftsync.git"
+    "url": "git+https://github.com/writercoder/draftsync.git"
   },
   "bugs": {
-    "url": "https://github.com/yourusername/draftsync/issues"
+    "url": "https://github.com/writercoder/draftsync/issues"
   },
-  "homepage": "https://github.com/yourusername/draftsync#readme"
+  "homepage": "https://github.com/writercoder/draftsync#readme"
 }
