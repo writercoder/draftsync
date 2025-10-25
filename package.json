@@ -1,6 +1,6 @@
 {
   "name": "draftsync",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Sync Markdown manuscripts with Google Docs and export to EPUB, Kindle, and web formats",
   "type": "module",
   "main": "src/cli.js",
