@@ -1,0 +1,66 @@
+{
+  "name": "draftsync",
+  "version": "0.1.0",
+  "description": "Sync Markdown manuscripts with Google Docs and export to EPUB, Kindle, and web formats",
+  "type": "module",
+  "main": "src/cli.js",
+  "bin": {
+    "draftsync": "./bin/draftsync.js"
+  },
+  "scripts": {
+    "start": "node bin/draftsync.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write \"**/*.{js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{js,json,md}\"",
+    "prepublishOnly": "npm test && npm run lint"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "templates/",
+    "README.md",
+    "LICENSE",
+    "QUICKSTART.md"
+  ],
+  "keywords": [
+    "markdown",
+    "google-docs",
+    "epub",
+    "kindle",
+    "publishing",
+    "manuscript",
+    "sync",
+    "cli"
+  ],
+  "author": "Richard Garbutt <richard@1000mileweb.com>",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "googleapis": "^134.0.0",
+    "ora": "^8.0.1"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^2.0.0",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "execa": "^9.2.0",
+    "prettier": "^3.2.5",
+    "vitest": "^2.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/yourusername/draftsync.git"
+  },
+  "bugs": {
+    "url": "https://github.com/yourusername/draftsync/issues"
+  },
+  "homepage": "https://github.com/yourusername/draftsync#readme"
+}

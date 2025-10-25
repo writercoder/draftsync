@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+*.epub
+*.docx
+*.pdf
+*.kpf
+
+# Google API credentials and tokens
+credentials.json
+.token.json
+
+# Draftsync manifest (may contain sensitive doc IDs)
+# Uncomment if you want to track this in git:
+# .draftsync.json
+
+# Environment files
+.env
+.env.local
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Testing
+coverage/
+.nyc_output/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# OS files
+Thumbs.db
+Desktop.ini

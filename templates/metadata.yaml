@@ -1,0 +1,39 @@
+---
+# EPUB Metadata
+# Edit this file to customize your EPUB's metadata
+# See: https://pandoc.org/MANUAL.html#epub-metadata
+
+title: "Your Book Title"
+subtitle: "A Compelling Subtitle"
+author:
+  - "Your Name"
+creator:
+  - role: author
+    text: "Your Name"
+contributor:
+  - role: editor
+    text: "Editor Name"
+publisher: "Your Publisher"
+rights: "© 2025 Your Name. All rights reserved."
+language: en-US
+subject:
+  - "Fiction"
+  - "Genre"
+description: |
+  A compelling description of your book that will appear in EPUB metadata.
+  This can span multiple lines.
+
+# Publication details
+date: "2025-01-15"
+identifier:
+  - scheme: ISBN
+    text: "978-0-00-000000-0"
+
+# EPUB-specific settings
+cover-image: "cover.jpg"  # Path to cover image (optional)
+css: "templates/epub.css"  # Path to custom CSS (optional)
+
+# Pandoc options
+toc: true
+toc-depth: 2
+number-sections: false
