@@ -1,5 +1,10 @@
 # draftsync
 
+[![CI](https://github.com/writercoder/draftsync/actions/workflows/ci.yml/badge.svg)](https://github.com/writercoder/draftsync/actions/workflows/ci.yml)
+[![npm version](https://badge.fury.io/js/draftsync.svg)](https://www.npmjs.com/package/draftsync)
+[![npm downloads](https://img.shields.io/npm/dm/draftsync.svg)](https://www.npmjs.com/package/draftsync)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 A developer-friendly CLI tool for synchronizing Markdown manuscripts with Google Docs and exporting to EPUB, Kindle, and web formats.
 
 ## Features
