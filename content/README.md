@@ -22,14 +22,14 @@ Use standard Markdown syntax:
 
 This is a paragraph.
 
-This is another paragraph with *italic* and **bold** text.
+This is another paragraph with _italic_ and **bold** text.
 
 ## Section Heading
 
 > A blockquote
 
-* List item 1
-* List item 2
+- List item 1
+- List item 2
 
 ---
 

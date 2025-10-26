@@ -126,9 +126,7 @@ export async function convertMarkdownToDocx(mdPath, refdocPath = null) {
   // Check if Pandoc is installed
   const isInstalled = await checkPandocInstalled();
   if (!isInstalled) {
-    throw new Error(
-      'Pandoc is not installed. Install it from https://pandoc.org/installing.html'
-    );
+    throw new Error('Pandoc is not installed. Install it from https://pandoc.org/installing.html');
   }
 
   // Generate output path
@@ -169,9 +167,7 @@ export async function convertDocxToMarkdown(docxPath, outputPath) {
   // Check if Pandoc is installed
   const isInstalled = await checkPandocInstalled();
   if (!isInstalled) {
-    throw new Error(
-      'Pandoc is not installed. Install it from https://pandoc.org/installing.html'
-    );
+    throw new Error('Pandoc is not installed. Install it from https://pandoc.org/installing.html');
   }
 
   // Ensure output directory exists
@@ -207,18 +203,12 @@ export async function convertDocxToMarkdown(docxPath, outputPath) {
 export async function convertMarkdownToHtml(mdPath, outputPath, options = {}) {
   console.log(chalk.gray(`  Converting ${mdPath} to HTML...`));
 
-  const {
-    template = null,
-    css = null,
-    standalone = true
-  } = options;
+  const { template = null, css = null, standalone = true } = options;
 
   // Check if Pandoc is installed
   const isInstalled = await checkPandocInstalled();
   if (!isInstalled) {
-    throw new Error(
-      'Pandoc is not installed. Install it from https://pandoc.org/installing.html'
-    );
+    throw new Error('Pandoc is not installed. Install it from https://pandoc.org/installing.html');
   }
 
   // Ensure output directory exists
@@ -267,19 +257,12 @@ export async function convertMarkdownToHtml(mdPath, outputPath, options = {}) {
 export async function convertMarkdownToEpub(mdFiles, outputPath, options = {}) {
   console.log(chalk.gray(`  Converting ${mdFiles.length} files to EPUB...`));
 
-  const {
-    metadata = null,
-    css = null,
-    cover = null,
-    tocDepth = 3
-  } = options;
+  const { metadata = null, css = null, cover = null, tocDepth = 3 } = options;
 
   // Check if Pandoc is installed
   const isInstalled = await checkPandocInstalled();
   if (!isInstalled) {
-    throw new Error(
-      'Pandoc is not installed. Install it from https://pandoc.org/installing.html'
-    );
+    throw new Error('Pandoc is not installed. Install it from https://pandoc.org/installing.html');
   }
 
   // Ensure output directory exists

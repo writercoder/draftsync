@@ -180,11 +180,9 @@ describe('CLI Dry-Run Tests', () => {
 
   describe('error handling', () => {
     it('should handle non-existent file gracefully in push', async () => {
-      const result = await execaNode(
-        CLI_PATH,
-        ['push', 'does-not-exist.md', '--dry-run'],
-        { reject: false }
-      );
+      const result = await execaNode(CLI_PATH, ['push', 'does-not-exist.md', '--dry-run'], {
+        reject: false
+      });
 
       // Dry-run should still work even if file doesn't exist (it won't read it)
       expect(result.exitCode).toBe(0);

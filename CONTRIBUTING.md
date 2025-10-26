@@ -40,6 +40,7 @@ The Google Docs sync features are currently stubbed. See TODOs in:
 - `src/docs.js` - Implement document formatting API
 
 Key tasks:
+
 - [ ] Implement OAuth2 authorization flow with browser redirect
 - [ ] Token storage and refresh
 - [ ] File upload to Google Drive
@@ -50,6 +51,7 @@ Key tasks:
 ### 2. Add Tests
 
 Create test coverage:
+
 - [ ] Unit tests for Pandoc conversions
 - [ ] Integration tests for build commands
 - [ ] Mock tests for Google API calls
@@ -58,6 +60,7 @@ Create test coverage:
 ### 3. Error Handling
 
 Improve error messages and recovery:
+
 - [ ] Better Pandoc error parsing
 - [ ] Retry logic for API calls
 - [ ] Validation before conversions
@@ -98,6 +101,7 @@ npm run format
 - Keep commits focused and atomic
 
 Format:
+
 ```
 type: brief description
 
@@ -111,12 +115,14 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 ## Testing Your Changes
 
 1. Test CLI commands manually:
+
    ```bash
    ./bin/draftsync.js init
    ./bin/draftsync.js build:epub
    ```
 
 2. Test with sample content:
+
    ```bash
    echo "# Test Chapter" > content/test.md
    ./bin/draftsync.js build:epub
@@ -138,6 +144,7 @@ Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 ## Documentation
 
 When adding features:
+
 - Update README.md with new commands
 - Add JSDoc comments to functions
 - Update QUICKSTART.md if it affects basic usage
@@ -146,6 +153,7 @@ When adding features:
 ## Questions?
 
 Open an issue for:
+
 - Bug reports
 - Feature requests
 - Questions about the codebase

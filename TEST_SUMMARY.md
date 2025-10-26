@@ -7,9 +7,11 @@ This document describes the comprehensive test suite created for the draftsync p
 ### Unit Tests (Fast, No Network, No Pandoc)
 
 #### 1. `test/pandoc.unit.test.js`
+
 Tests Pandoc argument building and error surfacing with mocked `child_process`.
 
 **What's tested:**
+
 - `buildMdToDocxArgs()` - Argument array construction with/without reference doc
 - `buildDocxToMdArgs()` - Argument array construction for reverse conversion
 - `runPandoc()` - Proper invocation of `spawnSync` with correct parameters
@@ -17,14 +19,17 @@ Tests Pandoc argument building and error surfacing with mocked `child_process`.
 - `docxToMd()` - Error throwing when Pandoc fails (docx → md)
 
 **Mocking strategy:**
+
 - Uses `vi.mock('child_process')` to mock `spawnSync`
 - Verifies exact arguments passed to `spawnSync`
 - Tests error messages contain directional indicators (md → docx, docx → md)
 
 #### 2. `test/manifest.unit.test.js`
+
 Tests manifest read/write operations using real filesystem in temporary directories.
 
 **What's tested:**
+
 - `readManifest()` - Returns `{}` when file is missing
 - `writeManifest()` - Writes valid JSON with 2-space indentation
 - Round-trip consistency - Multiple write/read cycles preserve data
@@ -32,14 +37,17 @@ Tests manifest read/write operations using real filesystem in temporary director
 - Complex manifest objects with nested structures
 
 **Testing approach:**
+
 - Creates temp directory with `mkdtempSync()` for each test
 - Uses real filesystem operations (no mocking)
 - Cleans up temp directory in `afterEach()`
 
 #### 3. `test/docs.payload.unit.test.js`
+
 Tests Google Docs API payload construction using inline snapshots.
 
 **What's tested:**
+
 - `buildHouseStyleRequests()` with various option combinations
 - Margin conversion from inches to points (1" = 72pt)
 - Double spacing vs. single spacing
@@ -47,15 +55,18 @@ Tests Google Docs API payload construction using inline snapshots.
 - Default values when no options provided
 
 **Snapshot tests:**
+
 - Double spacing + 1-inch margins + header text
 - Single spacing + 0.5-inch margins (no header)
 
 ### Integration Tests (Local Only, Optional Pandoc)
 
 #### 4. `test/pandoc.integration.test.js`
+
 Actually runs Pandoc if installed; skips gracefully if not available.
 
 **What's tested:**
+
 - Round-trip conversion: MD → DOCX → MD
 - Heading structure preservation (H1, H2)
 - Paragraph content preservation
@@ -63,16 +74,19 @@ Actually runs Pandoc if installed; skips gracefully if not available.
 - Error handling for non-existent files
 
 **Skip behavior:**
+
 - Checks `pandoc --version` before running tests
 - Uses `it.skip()` with message: "pandoc not installed; skipping integration test"
 - All tests run in temp directory with proper cleanup
 
 #### 5. `test/cli.push.dryrun.test.js`
+
 Tests CLI commands with `--dry-run` flag using `execa`.
 
 **What's tested:**
 
 **push --dry-run:**
+
 - Exit code 0
 - Outputs "Would convert MD → DOCX"
 - Outputs "Would create Google Doc"
@@ -82,12 +96,14 @@ Tests CLI commands with `--dry-run` flag using `execa`.
 - Mentions folder when `--folder-id` provided
 
 **pull --dry-run:**
+
 - Outputs "Would export Google Doc → DOCX"
 - Outputs "Would convert DOCX → MD"
 - Shows "[DRY RUN]" indicator
 - Requires file to be linked (error otherwise)
 
 **Error handling:**
+
 - Graceful handling of non-existent files
 - Clear error when pulling unlinked file
 - Combined options work together
@@ -130,6 +146,7 @@ With Pandoc: **< 10 seconds**
 ## Configuration Files
 
 ### `vitest.config.js`
+
 ```javascript
 - Test environment: node
 - Test pattern: test/**/*.test.js
@@ -142,6 +159,7 @@ With Pandoc: **< 10 seconds**
 ### New Functions Added
 
 **src/pandoc.js:**
+
 - `buildMdToDocxArgs(mdPath, outDocx, refdoc)` - Build argument array
 - `buildDocxToMdArgs(docxPath, outMd)` - Build argument array
 - `runPandoc(args)` - Thin wrapper over `spawnSync`
@@ -149,13 +167,16 @@ With Pandoc: **< 10 seconds**
 - `docxToMd(docxPath, outMd)` - Synchronous conversion
 
 **src/drive.js:**
+
 - `readManifest(manifestPath)` - Read manifest file, return `{}` if missing
 - `writeManifest(obj, manifestPath)` - Write manifest with formatting
 
 **src/docs.js:**
+
 - `buildHouseStyleRequests(options)` - Build batchUpdate payload for formatting
 
 **src/cli.js:**
+
 - Added `--dry-run` option to `push` command
 - Added `--dry-run` option to `pull` command
 - Dry-run mode prints plan without executing
@@ -163,14 +184,18 @@ With Pandoc: **< 10 seconds**
 ## Test Fixtures
 
 ### `fixtures/content/ch1.md`
+
 ```markdown
 # Chapter One: The Beginning
+
 Content with H1, H2, and paragraphs
 ```
 
 ### `fixtures/content/ch2.md`
+
 ```markdown
 # Chapter Two: The Journey
+
 Content with H1, H2, and paragraphs
 ```
 

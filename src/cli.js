@@ -228,7 +228,9 @@ async function statusCommand() {
     console.log(chalk.cyan(`  ${filePath}`));
     console.log(chalk.gray(`    Google Doc: ${info.gdocId}`));
     console.log(chalk.gray(`    Last sync:  ${new Date(info.lastSync).toLocaleString()}`));
-    console.log(chalk.gray(`    URL:        https://docs.google.com/document/d/${info.gdocId}/edit`));
+    console.log(
+      chalk.gray(`    URL:        https://docs.google.com/document/d/${info.gdocId}/edit`)
+    );
     console.log();
   }
 }
@@ -244,10 +246,7 @@ export function run() {
     .description('Sync Markdown manuscripts with Google Docs and export to EPUB, Kindle, and web')
     .version('0.1.0');
 
-  program
-    .command('init')
-    .description('Initialize a new draftsync project')
-    .action(initCommand);
+  program.command('init').description('Initialize a new draftsync project').action(initCommand);
 
   program
     .command('link <file> <gdoc-id>')

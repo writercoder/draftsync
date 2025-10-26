@@ -21,11 +21,13 @@ A developer-friendly CLI tool for synchronizing Markdown manuscripts with Google
 ### Prerequisites
 
 1. **Node.js** (v18 or higher)
+
    ```bash
    node --version
    ```
 
 2. **Pandoc** (required for conversions)
+
    ```bash
    # macOS
    brew install pandoc
@@ -80,6 +82,7 @@ draftsync init
 ```
 
 This creates:
+
 - `content/` - Put your Markdown files here
 - `dist/` - Build outputs go here
 - `templates/` - EPUB metadata and CSS
@@ -105,6 +108,7 @@ Your EPUB will be created at `dist/book.epub`.
 ### 4. Customize metadata
 
 Edit `templates/metadata.yaml` to set:
+
 - Book title, author, publisher
 - ISBN, publication date
 - Cover image path
@@ -229,9 +233,9 @@ your-project/
 Edit `templates/metadata.yaml`:
 
 ```yaml
-title: "Your Book Title"
-author: ["Your Name"]
-publisher: "Publisher Name"
+title: 'Your Book Title'
+author: ['Your Name']
+publisher: 'Publisher Name'
 language: en-US
 # ... see file for more options
 ```
@@ -239,6 +243,7 @@ language: en-US
 ### EPUB Styling
 
 Edit `templates/epub.css` to customize:
+
 - Typography and fonts
 - Paragraph indentation
 - Chapter headings
@@ -247,6 +252,7 @@ Edit `templates/epub.css` to customize:
 ### Manuscript Formatting (Google Docs)
 
 When pushing with `--format`, draftsync applies:
+
 - Double-spaced paragraphs (2.0 line spacing)
 - 1-inch margins on all sides
 - Header with author/title
@@ -255,6 +261,7 @@ When pushing with `--format`, draftsync applies:
 ## Development Status
 
 ### Working Features
+
 - ✅ Project initialization
 - ✅ EPUB build with Pandoc
 - ✅ Web HTML export
@@ -262,6 +269,7 @@ When pushing with `--format`, draftsync applies:
 - ✅ File manifest tracking
 
 ### In Progress (Stubbed)
+
 - ⚠️ Google OAuth2 authentication
 - ⚠️ Google Drive upload/download
 - ⚠️ Google Docs formatting API
@@ -279,10 +287,7 @@ Create a new file in `src/` and register it in `src/cli.js`:
 // src/cli.js
 import { myNewCommand } from './my-feature.js';
 
-program
-  .command('my-command')
-  .description('Do something cool')
-  .action(myNewCommand);
+program.command('my-command').description('Do something cool').action(myNewCommand);
 ```
 
 ### CI/CD Integration
@@ -312,6 +317,7 @@ jobs:
 ## Troubleshooting
 
 ### Pandoc not found
+
 ```bash
 # Install Pandoc
 brew install pandoc  # macOS
@@ -319,6 +325,7 @@ brew install pandoc  # macOS
 ```
 
 ### EPUB validation fails
+
 ```bash
 # Install epubcheck
 brew install epubcheck  # macOS
@@ -326,7 +333,9 @@ brew install epubcheck  # macOS
 ```
 
 ### Google API errors
+
 Make sure you have:
+
 1. Created a Google Cloud project
 2. Enabled Drive and Docs APIs
 3. Downloaded `credentials.json`
@@ -357,5 +366,6 @@ MIT
 ## Support
 
 For issues and questions:
+
 - GitHub Issues: https://github.com/yourusername/draftsync/issues
 - Documentation: This README

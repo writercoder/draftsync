@@ -15,11 +15,13 @@ npm link
 ## First EPUB in 3 Steps
 
 ### 1. Initialize project
+
 ```bash
 ./bin/draftsync.js init
 ```
 
 ### 2. Create sample content
+
 ```bash
 cat > content/chapter-01.md << 'EOF'
 # Chapter One: The Beginning
@@ -40,6 +42,7 @@ EOF
 ```
 
 ### 3. Build EPUB
+
 ```bash
 ./bin/draftsync.js build:epub
 ```
@@ -49,11 +52,13 @@ Your EPUB is now at `dist/book.epub`!
 ## Customize Your Book
 
 Edit the metadata:
+
 ```bash
 nano templates/metadata.yaml
 ```
 
 Change these fields:
+
 - `title`: Your book title
 - `author`: Your name
 - `date`: Publication date
@@ -62,28 +67,33 @@ Change these fields:
 ## Next Steps
 
 ### Add more chapters
+
 ```bash
 echo "# Chapter Two" > content/chapter-02.md
 echo "# Chapter Three" > content/chapter-03.md
 ```
 
 ### Rebuild
+
 ```bash
 ./bin/draftsync.js build:epub
 ```
 
 ### Validate
+
 ```bash
 ./bin/draftsync.js check:epub dist/book.epub
 ```
 
 ### Build web version
+
 ```bash
 ./bin/draftsync.js build:web
 open dist/web/index.html
 ```
 
 ### Preview for Kindle
+
 ```bash
 ./bin/draftsync.js preview:kdp dist/book.epub
 ```
@@ -93,6 +103,7 @@ open dist/web/index.html
 The Google Docs integration is stubbed but not fully implemented yet.
 
 To complete it, you'll need to:
+
 1. Set up Google Cloud credentials
 2. Implement the OAuth2 flow in `src/auth.js`
 3. Complete the Drive API integration in `src/drive.js`
@@ -103,6 +114,7 @@ See the TODO comments in those files for details.
 
 - Node.js 18+
 - Pandoc (for conversions)
+
   ```bash
   # macOS
   brew install pandoc
@@ -117,13 +129,17 @@ See the TODO comments in those files for details.
 ## Troubleshooting
 
 ### "pandoc: command not found"
+
 Install Pandoc: https://pandoc.org/installing.html
 
 ### "Cannot find module"
+
 Run `npm install` in the project directory
 
 ### Permission denied
+
 Make sure `bin/draftsync.js` is executable:
+
 ```bash
 chmod +x bin/draftsync.js
 ```

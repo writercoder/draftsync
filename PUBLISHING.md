@@ -26,12 +26,14 @@ Replace placeholder values in `package.json`:
 ```
 
 Replace:
+
 - `Your Name <your.email@example.com>` with your actual name and email
 - `yourusername` with your GitHub username (if you have a repo)
 
 ### 2. Create an npm Account
 
 If you don't have one:
+
 1. Go to https://www.npmjs.com/signup
 2. Create a free account
 3. Verify your email
@@ -61,11 +63,13 @@ draftsync --help
 Publish as `draftsync` (unscoped):
 
 **Pros:**
+
 - Simpler name: `npm install draftsync`
 - No @ prefix needed
 - More discoverable
 
 **Cons:**
+
 - Name must be unique globally (but `draftsync` is available!)
 
 ### Option B: Scoped Package
@@ -73,11 +77,13 @@ Publish as `draftsync` (unscoped):
 Publish as `@yourusername/draftsync`:
 
 **Pros:**
+
 - Always available (your username namespace)
 - Can organize multiple packages under your scope
 - Can have private packages (paid)
 
 **Cons:**
+
 - Longer name: `npm install @yourusername/draftsync`
 - Less discoverable
 
@@ -139,6 +145,7 @@ draftsync init
 ### Update npm Page
 
 Your package page will be at:
+
 - https://www.npmjs.com/package/draftsync
 
 The README.md will be displayed automatically!
@@ -157,6 +164,7 @@ Add this to the top of README.md:
 ### Versioning
 
 Follow semantic versioning (semver):
+
 - **Patch** (1.0.x): Bug fixes - `npm version patch`
 - **Minor** (1.x.0): New features - `npm version minor`
 - **Major** (x.0.0): Breaking changes - `npm version major`
@@ -220,6 +228,7 @@ npm publish --access public
 ### "You do not have permission to publish"
 
 Make sure you're logged in:
+
 ```bash
 npm whoami
 npm login
@@ -228,12 +237,14 @@ npm login
 ### "Package name already exists"
 
 Either:
+
 - Choose a different name
 - Use a scoped package: `@username/draftsync`
 
 ### "prepublishOnly script failed"
 
 Tests or linting failed. Fix issues:
+
 ```bash
 npm test
 npm run lint
@@ -242,6 +253,7 @@ npm run lint
 ### "Package name too similar to existing package"
 
 npm may flag similar names. If so:
+
 - Use scoped package
 - Choose a more unique name
 
@@ -261,12 +273,14 @@ The `files` field in package.json controls what's included:
 ```
 
 **Included:**
+
 - Source code (src/)
 - Binary entry point (bin/)
 - Templates
 - Documentation
 
 **Excluded:**
+
 - node_modules/
 - test/
 - fixtures/
@@ -288,6 +302,7 @@ The `files` field in package.json controls what's included:
 ## Recommended First Version
 
 For initial release:
+
 - Use version **`0.1.0`** or **`1.0.0`**
 - `0.x.x` signals "still in development"
 - `1.0.0` signals "production ready"

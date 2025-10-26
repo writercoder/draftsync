@@ -35,8 +35,8 @@ async function loadCredentials() {
   } catch (error) {
     throw new Error(
       'credentials.json not found. ' +
-      'Download it from Google Cloud Console and place it in the project root.\n' +
-      'See README.md for instructions.'
+        'Download it from Google Cloud Console and place it in the project root.\n' +
+        'See README.md for instructions.'
     );
   }
 }

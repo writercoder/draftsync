@@ -17,11 +17,7 @@ import chalk from 'chalk';
  * @returns {Array} Array of batchUpdate request objects
  */
 export function buildHouseStyleRequests(options = {}) {
-  const {
-    marginsInch = 1,
-    doubleSpacing = true,
-    headerText = null
-  } = options;
+  const { marginsInch = 1, doubleSpacing = true, headerText = null } = options;
 
   const requests = [];
 
@@ -96,10 +92,7 @@ export function buildHouseStyleRequests(options = {}) {
  * @returns {Promise<void>}
  */
 export async function formatDocument(auth, docId, options = {}) {
-  const {
-    headerText = 'Author / Title',
-    lineSpacing = 2.0
-  } = options;
+  const { headerText = 'Author / Title', lineSpacing = 2.0 } = options;
 
   console.log(chalk.gray(`  [STUB] Applying manuscript formatting to ${docId}`));
 
