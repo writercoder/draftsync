@@ -3,3 +3,4 @@ dist/
 coverage/
 *.min.js
 package-lock.json
+.draftsync.json
