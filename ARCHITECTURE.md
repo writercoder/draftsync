@@ -25,10 +25,10 @@ bin/draftsync.js          Entry point; calls run() from src/cli.js
 src/
 ├── cli.js                Commander setup, one handler per command,
 │                         user-facing output and error presentation
-├── auth.js               Google OAuth2 (STUB — issue #1)
-├── drive.js              Google Drive file operations (STUB — issue #2)
+├── auth.js               Google OAuth2 desktop loopback flow, token cache
+├── drive.js              Google Drive file operations (Drive v3)
 │                         + manifest read/write helpers
-├── docs.js               Google Docs formatting/content API (STUB — issue #3)
+├── docs.js               Google Docs formatting/content API (Docs v1)
 ├── pandoc.js             Pandoc process wrapper: md ⇄ docx, md → html,
 │                         md → epub, epubcheck validation
 ├── file-filter.js        Selects which .md files go into a build
@@ -69,9 +69,9 @@ content/ch1.md ──pandoc──▶ dist/ch1.docx ──drive.js──▶ Googl
 Google Doc ──drive.js export──▶ dist/ch1.docx ──pandoc──▶ content/ch1.md
 ```
 
-The Doc must already be linked in the manifest (`draftsync link` or a prior
-push). Pull is currently a placeholder pending the Drive export
-implementation (issues #2, #4).
+The Doc must already be linked in the manifest (a prior push, or
+`draftsync link` — though under the drive.file scope only draftsync-created
+Docs are readable).
 
 ### Build (Markdown → EPUB / HTML)
 
@@ -122,19 +122,19 @@ Lives in the project root of a _user's_ manuscript project (created by
 in `drive.js`). Direction: consolidate into a single `manifest.js` module
 that all callers use, and have it supply the configured paths.
 
-### Credentials (planned, issue #1)
+### Credentials
 
 - `credentials.json` — OAuth2 client from Google Cloud Console (gitignored)
-- `token.json` — cached user token (gitignored)
+- `.token.json` — cached user token, refreshed automatically (gitignored)
 
 ## External tools
 
-| Tool             | Used by       | Required?                    |
-| ---------------- | ------------- | ---------------------------- |
-| Pandoc           | `pandoc.js`   | Yes, for all conversions     |
-| epubcheck        | `check:epub`  | Optional; warns if missing   |
-| Kindle Previewer | `preview:kdp` | Optional; warns if missing   |
-| Google APIs      | sync layer    | Only for push/pull (stubbed) |
+| Tool             | Used by       | Required?                  |
+| ---------------- | ------------- | -------------------------- |
+| Pandoc           | `pandoc.js`   | Yes, for all conversions   |
+| epubcheck        | `check:epub`  | Optional; warns if missing |
+| Kindle Previewer | `preview:kdp` | Optional; warns if missing |
+| Google APIs      | sync layer    | Only for push/pull/format  |
 
 Every Pandoc entry point first runs `checkPandocInstalled()` and throws a
 message pointing at the install docs. Wrappers shell out via `exec` with
@@ -175,8 +175,11 @@ Convention (target state — parts of the codebase predate it):
 
 Tracked in the issue tracker; listed here so the doc doesn't overpromise:
 
-- The whole Google layer is stubbed (#1–#4); push/pull only work meaningfully
-  in `--dry-run`.
+- The Docs API cannot insert automatic page-number fields, so manuscript
+  footers with page numbers are not applied by `--format` (documented in
+  `src/docs.js`).
+- With the `drive.file` scope, draftsync only sees Docs and folders it
+  created — `pull` cannot read a pre-existing Doc linked manually.
 - `build:web` uses its own non-recursive file listing and **does not apply
   the file-filter exclusions** — drafts and notes currently leak into web
   builds. It should switch to `getFilesToBuild()` (noted on #5).

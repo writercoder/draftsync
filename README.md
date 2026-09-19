@@ -299,14 +299,16 @@ When pushing with `--format`, draftsync applies:
 - ✅ Kindle Previewer integration
 - ✅ File manifest tracking
 
-### In Progress (Stubbed)
+- ✅ Google OAuth2 authentication (`login` / `logout`)
+- ✅ Push: Markdown → DOCX → Google Doc (create and update), with an
+  auto-managed "draftsync" Drive folder
+- ✅ Pull: Google Doc → DOCX → Markdown
+- ✅ Manuscript formatting via the Docs API (`push --format`: 1-inch
+  margins, double-spaced 12pt serif, titled header)
 
-- ⚠️ Google OAuth2 authentication
-- ⚠️ Google Drive upload/download
-- ⚠️ Google Docs formatting API
-- ⚠️ DOCX → Google Docs conversion
-
-The Google API integration is currently stubbed with clear TODOs. The conversion and build pipeline is fully functional using Pandoc.
+Known limitation: the Google Docs API cannot insert automatic page-number
+fields, so manuscript footers with page numbers must be added once in the
+Docs UI if you need them.
 
 ## Extending draftsync
 
