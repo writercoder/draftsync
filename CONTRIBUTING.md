@@ -21,125 +21,136 @@ draftsync/
 │   ├── drive.js              # Google Drive API operations
 │   ├── docs.js               # Google Docs API operations
 │   ├── pandoc.js             # Pandoc conversion wrapper
+│   ├── file-filter.js        # Build file selection (globs, chapters lists)
 │   └── build/
 │       ├── epub.js           # EPUB build system
 │       ├── web.js            # Web HTML export
 │       └── kdp.js            # Kindle preview integration
 ├── templates/                # Default templates
+├── test/                     # Vitest unit/integration tests
+├── fixtures/                 # Test fixtures
 └── content/                  # Example content directory
 ```
 
-## Priority TODOs
+See [ARCHITECTURE.md](ARCHITECTURE.md) for the module layering rules, data
+flows, and error-handling conventions — read it before adding a module or
+changing how modules depend on each other.
 
-### 1. Complete Google API Integration
+## What to work on
 
-The Google Docs sync features are currently stubbed. See TODOs in:
+Open work is tracked in
+[GitHub Issues](https://github.com/writercoder/draftsync/issues). The
+Google API integration (OAuth2, Drive, Docs) is the largest missing piece;
+those issues are labeled `google-api`.
 
-- `src/auth.js` - Implement full OAuth2 flow
-- `src/drive.js` - Implement file upload/download
-- `src/docs.js` - Implement document formatting API
+## Coding Standards
 
-Key tasks:
+### Language and modules
 
-- [ ] Implement OAuth2 authorization flow with browser redirect
-- [ ] Token storage and refresh
-- [ ] File upload to Google Drive
-- [ ] DOCX → Google Docs conversion
-- [ ] Google Docs → DOCX export
-- [ ] Apply formatting via Google Docs API
+- Plain JavaScript (no TypeScript), ES modules only (`"type": "module"`).
+- Node ≥ 18. Don't add syntax or APIs newer than the oldest supported Node
+  (CI runs 18/20/22).
+- File names are kebab-case (`file-filter.js`). Use named exports; no
+  default exports.
+- Prefer `import { promises as fs } from 'fs'` over sync fs calls in
+  library code (tests may use sync helpers for setup/teardown).
 
-### 2. Add Tests
+### JSDoc
 
-Create test coverage:
+- Every exported function gets a JSDoc block: one-sentence summary,
+  `@param` with types, `@returns`. Match the style of the existing modules.
+- Each source file starts with a short header comment describing the
+  module's purpose.
 
-- [ ] Unit tests for Pandoc conversions
-- [ ] Integration tests for build commands
-- [ ] Mock tests for Google API calls
-- [ ] CLI command tests
+### Error handling and CLI output
 
-### 3. Error Handling
+Follow the convention in ARCHITECTURE.md:
 
-Improve error messages and recovery:
+- Leaf modules **throw** `Error` with a user-actionable message; they never
+  print errors or call `process.exit`. Non-fatal issues `console.warn` and
+  continue.
+- Command handlers **present**: catch errors, print them, add remediation
+  hints, exit non-zero on failure.
 
-- [ ] Better Pandoc error parsing
-- [ ] Retry logic for API calls
-- [ ] Validation before conversions
-- [ ] User-friendly error messages
+Console color semantics (chalk):
 
-### 4. Additional Features
+| Style             | Meaning                             |
+| ----------------- | ----------------------------------- |
+| `chalk.blue.bold` | Command/section headers             |
+| `chalk.green`     | Success (`✓ ...`)                   |
+| `chalk.yellow`    | Warnings, dry-run banners           |
+| `chalk.red`       | Errors (`✗ ...`)                    |
+| `chalk.gray`      | Secondary detail, hints, next steps |
 
-- [ ] Support for more metadata fields
-- [ ] Custom Pandoc filters
-- [ ] Batch operations (push/pull all files)
-- [ ] Watch mode for auto-rebuilding
-- [ ] PDF export
-- [ ] Git integration for version tracking
-- [ ] Interactive init wizard
+Use `ora` spinners for multi-step build pipelines (`start`/`succeed`/
+`fail`/`warn`); use plain `console.log` for simple commands.
 
-## Code Style
+### Dependencies
 
-This project uses ESLint and Prettier:
+- Keep the runtime dependency list small; this is an installable CLI.
+- Anything imported from `src/` must be in `dependencies` (not
+  `devDependencies`) — the lint setup checks this.
+
+## Linting and formatting
+
+ESLint and Prettier are enforced in CI; warnings are not tolerated (rules
+are error-level so nothing accumulates silently).
 
 ```bash
-# Check linting
-npm run lint
-
-# Fix linting issues
-npm run lint:fix
-
-# Check formatting
-npm run format:check
-
-# Fix formatting
-npm run format
+npm run lint          # check
+npm run lint:fix      # auto-fix
+npm run format:check  # check formatting
+npm run format        # fix formatting
 ```
 
-## Commit Guidelines
+Unused function parameters that are intentional (e.g. in stubs) should be
+prefixed with `_`.
 
-- Use clear, descriptive commit messages
-- Reference issue numbers when applicable
-- Keep commits focused and atomic
+## Testing
 
-Format:
-
-```
-type: brief description
-
-Longer explanation if needed
-
-Fixes #123
+```bash
+npm test              # run all tests once
+npm run test:watch    # watch mode
+npm run test:coverage # with coverage (thresholds enforced in CI)
 ```
 
-Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
+- New logic ships with unit tests (`test/<area>.unit.test.js`). Use temp
+  directories (`mkdtempSync`) rather than writing into the repo.
+- Tests that invoke external binaries (Pandoc) are integration tests
+  (`test/<area>.integration.test.js`).
+- CLI behavior is tested by running the real binary with execa in
+  `--dry-run` mode — no network access in tests.
+- Google API code must be structured so the client can be mocked (pass
+  clients in as parameters; don't construct them deep inside functions).
 
-## Testing Your Changes
+Manual smoke test:
 
-1. Test CLI commands manually:
+```bash
+./bin/draftsync.js init
+echo "# Test Chapter" > content/test.md
+./bin/draftsync.js build:epub
+```
 
-   ```bash
-   ./bin/draftsync.js init
-   ./bin/draftsync.js build:epub
-   ```
+Verify the EPUB output opens in a reader.
 
-2. Test with sample content:
+## Commits and branches
 
-   ```bash
-   echo "# Test Chapter" > content/test.md
-   ./bin/draftsync.js build:epub
-   ```
-
-3. Verify EPUB output opens in a reader
+- Commit messages follow `type: brief description` with types `feat`,
+  `fix`, `docs`, `refactor`, `test`, `chore`; add a body explaining _why_
+  when it isn't obvious, and `Fixes #123` to close issues.
+- Keep commits focused and atomic.
+- Non-trivial changes go on a feature branch (`feature/my-feature` or
+  `fix/issue-123`) with a PR; CI (lint, tests, formatting, all three Node
+  versions) must be green before merge. Trivial docs/chore commits may land
+  directly on `main` at the maintainer's discretion.
 
 ## Submitting a Pull Request
 
-1. Fork the repository
+1. Fork the repository (or branch, if you have write access)
 2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Run linting and formatting
-5. Test your changes
-6. Commit with clear messages
-7. Push to your fork
-8. Open a pull request
+3. Make your changes, with tests
+4. Run `npm run lint && npm test && npm run format:check`
+5. Push and open a pull request referencing the issue it addresses
 
 ## Documentation
 
@@ -148,16 +159,12 @@ When adding features:
 - Update README.md with new commands
 - Add JSDoc comments to functions
 - Update QUICKSTART.md if it affects basic usage
-- Add examples to help users
+- Update ARCHITECTURE.md if module boundaries or data flows change
 
 ## Questions?
 
-Open an issue for:
-
-- Bug reports
-- Feature requests
-- Questions about the codebase
-- Discussion about architecture
+Open an issue for bug reports, feature requests, questions about the
+codebase, or architecture discussion.
 
 ## Code of Conduct
 
