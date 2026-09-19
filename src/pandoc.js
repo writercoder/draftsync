@@ -243,6 +243,49 @@ export async function convertMarkdownToHtml(mdPath, outputPath, options = {}) {
 }
 
 /**
+ * Convert multiple Markdown files to a single DOCX
+ *
+ * @param {string[]} mdFiles - Array of Markdown file paths, in order
+ * @param {string} outputPath - Path to save DOCX file
+ * @param {Object} [options] - Conversion options
+ * @param {string} [options.refdoc] - Reference DOCX for styling
+ * @param {string} [options.metadata] - YAML metadata file
+ * @returns {Promise<string>} Path to generated DOCX file
+ */
+export async function convertMarkdownFilesToDocx(mdFiles, outputPath, options = {}) {
+  console.log(chalk.gray(`  Converting ${mdFiles.length} files to DOCX...`));
+
+  const { refdoc = null, metadata = null } = options;
+
+  const isInstalled = await checkPandocInstalled();
+  if (!isInstalled) {
+    throw new Error('Pandoc is not installed. Install it from https://pandoc.org/installing.html');
+  }
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const inputFiles = mdFiles.map(f => `"${f}"`).join(' ');
+  let command = `pandoc ${inputFiles} -o "${outputPath}"`;
+  if (refdoc) {
+    command += ` --reference-doc="${refdoc}"`;
+  }
+  if (metadata) {
+    command += ` --metadata-file="${metadata}"`;
+  }
+
+  try {
+    const { stderr } = await execAsync(command);
+    if (stderr && !stderr.includes('Warning')) {
+      console.log(chalk.yellow(`  Pandoc warnings: ${stderr}`));
+    }
+    console.log(chalk.gray(`  ✓ Created ${outputPath}`));
+    return outputPath;
+  } catch (error) {
+    throw new Error(`Pandoc conversion failed: ${error.message}`);
+  }
+}
+
+/**
  * Convert Markdown files to EPUB
  *
  * @param {string[]} mdFiles - Array of Markdown file paths

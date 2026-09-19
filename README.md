@@ -188,6 +188,12 @@ draftsync build:epub [options]
   -c, --css <path>       # CSS file (default: templates/epub.css)
   --cover <path>         # Cover image
 
+# Build a single Word document (for reviewers who want .docx)
+draftsync build:docx [options]
+  -o, --output <path>    # Output file (default: dist/manuscript.docx)
+  -m, --metadata <path>  # Metadata YAML (default: templates/metadata.yaml)
+  -r, --refdoc <path>    # Reference .docx for styling
+
 # Validate EPUB
 draftsync check:epub <file.epub>
 

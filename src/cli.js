@@ -13,6 +13,7 @@ import { createDoc, updateDoc, exportDocAsDocx, ensureFolder } from './drive.js'
 import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
+import { buildDocx } from './build/docx.js';
 import { buildWeb } from './build/web.js';
 import { previewKdp } from './build/kdp.js';
 
@@ -356,6 +357,16 @@ export function run() {
     )
     .option('--exclude <patterns...>', 'Exclude files matching these patterns (e.g., "*.draft.md")')
     .action(buildEpub);
+
+  program
+    .command('build:docx')
+    .description('Build a single Word document from Markdown files')
+    .option('-o, --output <path>', 'Output file path', 'dist/manuscript.docx')
+    .option('-m, --metadata <path>', 'Metadata YAML file', 'templates/metadata.yaml')
+    .option('-r, --refdoc <path>', 'Reference .docx for styling')
+    .option('--include <patterns...>', 'Include only files matching these patterns')
+    .option('--exclude <patterns...>', 'Exclude files matching these patterns')
+    .action(buildDocx);
 
   program
     .command('check:epub')
