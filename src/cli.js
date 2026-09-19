@@ -15,6 +15,8 @@ import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
 import { buildDocx } from './build/docx.js';
 import { serveCommand } from './serve.js';
+import { openStore } from './store.js';
+import { AI_PURPOSES, providerFromUrl, ingestClaudeCode, buildAiReport } from './ai-audit.js';
 import { buildWeb } from './build/web.js';
 import { previewKdp } from './build/kdp.js';
 
@@ -298,6 +300,92 @@ async function statusCommand() {
 }
 
 /**
+ * Log an AI usage event against this project
+ */
+async function aiLogCommand(options) {
+  const store = openStore();
+  try {
+    const project = store.getOrCreateProject(process.cwd());
+    const provider = options.provider || (options.url && providerFromUrl(options.url));
+    if (!provider) {
+      console.error(chalk.red('✗ Provide --provider, or a --url from claude.ai / chatgpt.com'));
+      process.exitCode = 1;
+      return;
+    }
+    const purpose = options.purpose || 'other';
+    if (!AI_PURPOSES.includes(purpose)) {
+      console.error(chalk.red(`✗ Unknown purpose "${purpose}". One of: ${AI_PURPOSES.join(', ')}`));
+      process.exitCode = 1;
+      return;
+    }
+    if (purpose === 'prose-suggestion' && !options.justification) {
+      console.error(
+        chalk.red('✗ prose-suggestion events require --justification (project AI policy)')
+      );
+      process.exitCode = 1;
+      return;
+    }
+    const { event } = store.upsertAiEvent(project.id, {
+      sessionKey: options.url || `manual:${Date.now()}`,
+      provider,
+      source: options.url ? 'chat-link' : 'manual',
+      url: options.url || null,
+      model: options.model || null,
+      file: options.file || null,
+      purpose,
+      justification: options.justification || ''
+    });
+    console.log(chalk.green(`✓ Logged AI event #${event.id} (${provider}, ${purpose})`));
+  } finally {
+    store.close();
+  }
+}
+
+/**
+ * Ingest local Claude Code transcripts into the AI ledger
+ */
+async function aiIngestCommand() {
+  const store = openStore();
+  try {
+    const project = store.getOrCreateProject(process.cwd());
+    const result = await ingestClaudeCode(store, project.id, process.cwd());
+    if (result.found === 0) {
+      console.log(chalk.gray('No Claude Code transcripts found for this project.'));
+      return;
+    }
+    console.log(
+      chalk.green(
+        `✓ Ingested ${result.found} Claude Code session(s): ${result.created} new, ${result.updated} refreshed`
+      )
+    );
+    console.log(
+      chalk.gray('  Sessions default to purpose "tooling" — reclassify any that touched prose.')
+    );
+  } finally {
+    store.close();
+  }
+}
+
+/**
+ * Print (or write) the AI disclosure report
+ */
+async function aiReportCommand(options) {
+  const store = openStore();
+  try {
+    const project = store.getOrCreateProject(process.cwd());
+    const report = buildAiReport(store, project);
+    if (options.output) {
+      await fs.writeFile(options.output, report, 'utf8');
+      console.log(chalk.green(`✓ Wrote AI disclosure report to ${options.output}`));
+    } else {
+      console.log(report);
+    }
+  } finally {
+    store.close();
+  }
+}
+
+/**
  * Main CLI entry point
  */
 export function run() {
@@ -386,6 +474,28 @@ export function run() {
     .description('Serve the local kanban board for this project')
     .option('-p, --port <port>', 'Port to listen on', '8787')
     .action(serveCommand);
+
+  program
+    .command('ai:log')
+    .description('Log an AI usage event against this project')
+    .option('-u, --url <url>', 'Chat session URL (claude.ai or chatgpt.com)')
+    .option('--provider <name>', 'Provider (anthropic, openai) when no URL is given')
+    .option('--model <name>', 'Model used')
+    .option('--purpose <purpose>', `One of: ${AI_PURPOSES.join(', ')}`, 'other')
+    .option('-j, --justification <text>', 'Why/how the output was used (required for prose)')
+    .option('-f, --file <path>', 'Content file the usage relates to')
+    .action(aiLogCommand);
+
+  program
+    .command('ai:ingest')
+    .description('Ingest local Claude Code transcripts into the AI ledger')
+    .action(aiIngestCommand);
+
+  program
+    .command('ai:report')
+    .description('Generate the AI disclosure report for this project')
+    .option('-o, --output <path>', 'Write to a file instead of stdout')
+    .action(aiReportCommand);
 
   program
     .command('preview:kdp')

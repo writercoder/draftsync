@@ -61,6 +61,24 @@ export function openStore(dataDir = getDataDir()) {
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, stage, position);
+    CREATE TABLE IF NOT EXISTS ai_events (
+      id INTEGER PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      card_id INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+      file TEXT,
+      provider TEXT NOT NULL,
+      source TEXT NOT NULL,
+      session_key TEXT NOT NULL,
+      url TEXT,
+      model TEXT,
+      purpose TEXT NOT NULL DEFAULT 'other',
+      tokens_in INTEGER NOT NULL DEFAULT 0,
+      tokens_out INTEGER NOT NULL DEFAULT 0,
+      justification TEXT NOT NULL DEFAULT '',
+      occurred_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(project_id, session_key)
+    );
   `);
   return new Store(db);
 }
@@ -221,6 +239,118 @@ export class Store {
         .all(projectId)
         .map(r => r.file)
     );
+  }
+
+  /**
+   * List a project's AI events, newest first
+   *
+   * @param {number} projectId - Project ID
+   * @returns {Array<Object>} AI event rows
+   */
+  listAiEvents(projectId) {
+    return this.db
+      .prepare('SELECT * FROM ai_events WHERE project_id = ? ORDER BY occurred_at DESC, id DESC')
+      .all(projectId);
+  }
+
+  /**
+   * Insert an AI event, or update the existing one with the same
+   * session_key (used by transcript ingestion to stay idempotent)
+   *
+   * @param {number} projectId - Project ID
+   * @param {Object} fields - Event fields (see schema)
+   * @returns {{event: Object, created: boolean}} The event row and whether
+   *   it was newly created
+   */
+  upsertAiEvent(projectId, fields) {
+    const {
+      sessionKey,
+      provider,
+      source,
+      cardId = null,
+      file = null,
+      url = null,
+      model = null,
+      purpose = 'other',
+      tokensIn = 0,
+      tokensOut = 0,
+      justification = '',
+      occurredAt = null
+    } = fields;
+    if (!sessionKey) throw new Error('sessionKey is required');
+    if (!provider) throw new Error('provider is required');
+    if (!source) throw new Error('source is required');
+
+    const existing = this.db
+      .prepare('SELECT * FROM ai_events WHERE project_id = ? AND session_key = ?')
+      .get(projectId, sessionKey);
+
+    if (existing) {
+      // Refresh volatile fields; keep user-entered ones (purpose,
+      // justification, card link) as they are
+      this.db
+        .prepare(
+          'UPDATE ai_events SET model = ?, tokens_in = ?, tokens_out = ?, occurred_at = ? WHERE id = ?'
+        )
+        .run(
+          model ?? existing.model,
+          tokensIn,
+          tokensOut,
+          occurredAt ?? existing.occurred_at,
+          existing.id
+        );
+      return {
+        event: this.db.prepare('SELECT * FROM ai_events WHERE id = ?').get(existing.id),
+        created: false
+      };
+    }
+
+    const { lastInsertRowid } = this.db
+      .prepare(
+        `INSERT INTO ai_events
+           (project_id, card_id, file, provider, source, session_key, url, model,
+            purpose, tokens_in, tokens_out, justification, occurred_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        projectId,
+        cardId,
+        file,
+        provider,
+        source,
+        sessionKey,
+        url,
+        model,
+        purpose,
+        tokensIn,
+        tokensOut,
+        justification,
+        occurredAt
+      );
+    return {
+      event: this.db.prepare('SELECT * FROM ai_events WHERE id = ?').get(lastInsertRowid),
+      created: true
+    };
+  }
+
+  /**
+   * Get one AI event by ID
+   *
+   * @param {number} id - Event ID
+   * @returns {Object|undefined} Event row
+   */
+  getAiEvent(id) {
+    return this.db.prepare('SELECT * FROM ai_events WHERE id = ?').get(id);
+  }
+
+  /**
+   * Delete an AI event
+   *
+   * @param {number} id - Event ID
+   * @returns {boolean} True if an event was deleted
+   */
+  deleteAiEvent(id) {
+    return this.db.prepare('DELETE FROM ai_events WHERE id = ?').run(id).changes > 0;
   }
 
   /** Close the database */

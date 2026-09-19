@@ -7,6 +7,7 @@
  */
 
 import http from 'http';
+import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -14,6 +15,7 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { openStore, getDataDir, STAGES } from './store.js';
 import { getAllMarkdownFiles, filterExcludedFiles } from './file-filter.js';
+import { AI_PURPOSES, providerFromUrl, ingestClaudeCode } from './ai-audit.js';
 
 const UI_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'kanban.html');
 
@@ -85,11 +87,70 @@ export function createKanbanServer({ store, projectPath }) {
       }
 
       if (req.method === 'GET' && url.pathname === '/api/board') {
+        const aiEvents = store.listAiEvents(project.id);
+        const aiCounts = {};
+        for (const e of aiEvents) {
+          if (e.card_id) aiCounts[e.card_id] = (aiCounts[e.card_id] || 0) + 1;
+        }
         return send(200, {
           project: { name: project.name, path: project.path },
           stages: STAGES,
-          cards: store.listCards(project.id)
+          cards: store.listCards(project.id),
+          ai: { total: aiEvents.length, byCard: aiCounts }
         });
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/ai-events') {
+        return send(200, { events: store.listAiEvents(project.id), purposes: AI_PURPOSES });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/ai-events') {
+        const body = await readBody(req);
+        const provider = body.provider || (body.url && providerFromUrl(body.url));
+        if (!provider) {
+          return send(400, { error: 'provider required (or a claude.ai / chatgpt.com URL)' });
+        }
+        if (!AI_PURPOSES.includes(body.purpose)) {
+          return send(400, { error: `purpose must be one of: ${AI_PURPOSES.join(', ')}` });
+        }
+        if (body.purpose === 'prose-suggestion' && !body.justification) {
+          return send(400, { error: 'prose-suggestion requires a justification (AI policy)' });
+        }
+        let file = body.file || null;
+        if (body.card_id) {
+          const card = store.getCard(Number(body.card_id));
+          if (!card || card.project_id !== project.id) {
+            return send(400, { error: 'unknown card' });
+          }
+          file = file || card.file;
+        }
+        const { event } = store.upsertAiEvent(project.id, {
+          sessionKey: body.url || `manual:${crypto.randomUUID()}`,
+          provider,
+          source: body.url ? 'chat-link' : 'manual',
+          url: body.url || null,
+          model: body.model || null,
+          cardId: body.card_id ? Number(body.card_id) : null,
+          file,
+          purpose: body.purpose,
+          justification: body.justification || ''
+        });
+        return send(201, event);
+      }
+
+      const aiMatch = url.pathname.match(/^\/api\/ai-events\/(\d+)$/);
+      if (req.method === 'DELETE' && aiMatch) {
+        const event = store.getAiEvent(Number(aiMatch[1]));
+        if (!event || event.project_id !== project.id) {
+          return send(404, { error: 'event not found' });
+        }
+        store.deleteAiEvent(event.id);
+        return send(200, { deleted: true });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/ai-ingest') {
+        const result = await ingestClaudeCode(store, project.id, projectPath);
+        return send(200, result);
       }
 
       if (req.method === 'POST' && url.pathname === '/api/cards') {

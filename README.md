@@ -219,6 +219,33 @@ build filters). Data is stored locally in `~/.draftsync/draftsync.db` —
 one database, projects keyed by directory, so every draftsync project
 gets its own board.
 
+### AI Auditability
+
+Policy: AI output should not end up in prose without specific
+acknowledgment and justification by the author. draftsync keeps an AI
+usage ledger per project (in `~/.draftsync/draftsync.db`) to make that
+auditable.
+
+```bash
+# Ingest local Claude Code session transcripts (no API keys needed)
+draftsync ai:ingest
+
+# Log AI usage manually, or link a chat session by URL
+draftsync ai:log --url https://claude.ai/chat/<id> --purpose critique \
+  --justification "asked for pacing feedback on ch 3"
+
+# Generate the disclosure report (grouped by chapter)
+draftsync ai:report [-o notes/ai-disclosure.md]
+```
+
+Purposes: `tooling`, `brainstorm`, `research`, `critique`, `copy-edit`,
+`prose-suggestion`, `other`. A `prose-suggestion` event requires a
+justification. The kanban board (`draftsync serve`) shows an AI log with
+per-chapter badges; chat-session URLs (claude.ai / chatgpt.com) can be
+linked at project or chapter level, and Claude Code usage can be imported
+from the board too. Ingested coding sessions default to `tooling` —
+reclassify any that touched prose.
+
 ## Workflow Examples
 
 ### Writing and Publishing Workflow

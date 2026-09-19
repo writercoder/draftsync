@@ -105,6 +105,49 @@ describe('Serve Integration Tests', () => {
     expect((await api('/api/nope')).status).toBe(404);
   });
 
+  it('should manage AI events over the API with provider auto-detection', async () => {
+    const card = await api('/api/cards', 'POST', { title: 'Chapter 1' });
+
+    const created = await api('/api/ai-events', 'POST', {
+      url: 'https://claude.ai/chat/abc',
+      purpose: 'critique',
+      card_id: card.body.id,
+      justification: 'asked for pacing feedback'
+    });
+    expect(created.status).toBe(201);
+    expect(created.body.provider).toBe('anthropic');
+    expect(created.body.card_id).toBe(card.body.id);
+
+    const board = await api('/api/board');
+    expect(board.body.ai.total).toBe(1);
+    expect(board.body.ai.byCard[card.body.id]).toBe(1);
+
+    const listed = await api('/api/ai-events');
+    expect(listed.body.events).toHaveLength(1);
+    expect(listed.body.purposes).toContain('prose-suggestion');
+
+    const removed = await api(`/api/ai-events/${created.body.id}`, 'DELETE');
+    expect(removed.body.deleted).toBe(true);
+  });
+
+  it('should enforce the AI policy and provider requirements', async () => {
+    const noProvider = await api('/api/ai-events', 'POST', { purpose: 'other' });
+    expect(noProvider.status).toBe(400);
+
+    const noJustification = await api('/api/ai-events', 'POST', {
+      provider: 'openai',
+      purpose: 'prose-suggestion'
+    });
+    expect(noJustification.status).toBe(400);
+    expect(noJustification.body.error).toMatch(/justification/);
+
+    const badPurpose = await api('/api/ai-events', 'POST', {
+      provider: 'openai',
+      purpose: 'vibes'
+    });
+    expect(badPurpose.status).toBe(400);
+  });
+
   it('should import chapters from content/, excluding drafts, idempotently', async () => {
     const first = await api('/api/import', 'POST');
     expect(first.body.imported).toBe(2);

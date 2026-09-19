@@ -203,6 +203,53 @@
         justify-content: space-between;
         margin-top: 1.1rem;
       }
+      .ai-chip {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        border-radius: 999px;
+        padding: 0 0.45rem;
+        margin-top: 0.25rem;
+      }
+      .ai-list {
+        max-height: 14rem;
+        overflow-y: auto;
+        margin-top: 0.6rem;
+        border-top: 1px solid var(--line);
+      }
+      .ai-event {
+        border-bottom: 1px solid var(--line);
+        padding: 0.5rem 0;
+        font-size: 0.85rem;
+      }
+      .ai-event .meta {
+        color: var(--muted);
+        font-size: 0.75rem;
+      }
+      .ai-event a {
+        color: var(--accent);
+        overflow-wrap: anywhere;
+      }
+      .ai-event .just {
+        font-style: italic;
+        color: var(--muted);
+      }
+      .ai-event button {
+        float: right;
+        font-size: 0.7rem;
+        padding: 0.1rem 0.45rem;
+      }
+      dialog select {
+        font: inherit;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--ground);
+        color: var(--ink);
+        width: 100%;
+      }
       .empty {
         color: var(--muted);
         padding: 2rem;
@@ -215,9 +262,32 @@
     <header>
       <h1 id="project-name">draftsync board</h1>
       <span class="path" id="project-path"></span>
+      <button id="ai-open">AI log</button>
       <button id="import">Import chapters</button>
     </header>
     <div class="board" id="board"></div>
+
+    <dialog id="ai-dialog">
+      <form id="ai-form">
+        <strong>AI usage log</strong>
+        <label for="ai-url">Chat session URL (claude.ai or chatgpt.com)</label>
+        <input type="text" id="ai-url" placeholder="https://claude.ai/chat/…" />
+        <label for="ai-purpose">Purpose</label>
+        <select id="ai-purpose"></select>
+        <label for="ai-card">Chapter (optional)</label>
+        <select id="ai-card"></select>
+        <label for="ai-just">Justification (required for prose-suggestion)</label>
+        <textarea id="ai-just" placeholder="How the output was used, and why."></textarea>
+        <div class="dialog-actions">
+          <button type="button" id="ai-ingest">Import Claude Code usage</button>
+          <span>
+            <button type="button" id="ai-close">Close</button>
+            <button type="submit" class="primary">Add link</button>
+          </span>
+        </div>
+      </form>
+      <div class="ai-list" id="ai-list"></div>
+    </dialog>
 
     <dialog id="editor">
       <form method="dialog" id="editor-form">
@@ -257,6 +327,7 @@
         document.getElementById('project-name').textContent = board.project.name;
         document.getElementById('project-path').textContent = board.project.path;
         document.title = board.project.name + ' · draftsync board';
+        document.getElementById('ai-open').textContent = `AI log (${board.ai.total})`;
         render();
       };
 
@@ -293,6 +364,13 @@
               f.className = 'file';
               f.textContent = card.file;
               el.appendChild(f);
+            }
+            const aiCount = (state.ai && state.ai.byCard[card.id]) || 0;
+            if (aiCount > 0) {
+              const chip = document.createElement('span');
+              chip.className = 'ai-chip';
+              chip.textContent = `AI ${aiCount}`;
+              el.appendChild(chip);
             }
             el.addEventListener('dragstart', () => el.classList.add('dragging'));
             el.addEventListener('dragend', () => el.classList.remove('dragging'));
@@ -391,6 +469,97 @@
         } catch (e) {
           alert(e.message);
         }
+      });
+
+      const renderAiDialog = async () => {
+        const { events, purposes } = await api('/api/ai-events');
+        const purposeSel = document.getElementById('ai-purpose');
+        purposeSel.innerHTML = purposes.map(p => `<option value="${p}">${p}</option>`).join('');
+        const cardSel = document.getElementById('ai-card');
+        cardSel.innerHTML =
+          '<option value="">Project-wide</option>' +
+          state.cards.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
+        const cardTitle = id => {
+          const c = state.cards.find(x => x.id === id);
+          return c ? c.title : null;
+        };
+        const list = document.getElementById('ai-list');
+        list.innerHTML = '';
+        for (const e of events) {
+          const div = document.createElement('div');
+          div.className = 'ai-event';
+          const del = document.createElement('button');
+          del.textContent = 'Remove';
+          del.addEventListener('click', async () => {
+            await api(`/api/ai-events/${e.id}`, 'DELETE');
+            renderAiDialog();
+            load();
+          });
+          div.appendChild(del);
+          const head = document.createElement('div');
+          head.textContent = `${e.purpose} — ${e.provider} (${e.source})`;
+          div.appendChild(head);
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = [
+            cardTitle(e.card_id) || e.file || 'project-wide',
+            e.model,
+            e.tokens_out ? `${e.tokens_in}→${e.tokens_out} tok` : null,
+            e.occurred_at ? e.occurred_at.slice(0, 10) : null
+          ]
+            .filter(Boolean)
+            .join(' · ');
+          div.appendChild(meta);
+          if (e.url) {
+            const a = document.createElement('a');
+            a.href = e.url;
+            a.target = '_blank';
+            a.textContent = e.url;
+            div.appendChild(a);
+          }
+          if (e.justification) {
+            const j = document.createElement('div');
+            j.className = 'just';
+            j.textContent = e.justification;
+            div.appendChild(j);
+          }
+          list.appendChild(div);
+        }
+      };
+
+      document.getElementById('ai-open').addEventListener('click', async () => {
+        await renderAiDialog();
+        document.getElementById('ai-dialog').showModal();
+      });
+      document
+        .getElementById('ai-close')
+        .addEventListener('click', () => document.getElementById('ai-dialog').close());
+      document.getElementById('ai-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        try {
+          await api('/api/ai-events', 'POST', {
+            url: document.getElementById('ai-url').value || undefined,
+            purpose: document.getElementById('ai-purpose').value,
+            card_id: document.getElementById('ai-card').value || undefined,
+            justification: document.getElementById('ai-just').value
+          });
+          document.getElementById('ai-url').value = '';
+          document.getElementById('ai-just').value = '';
+          renderAiDialog();
+          load();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+      document.getElementById('ai-ingest').addEventListener('click', async () => {
+        const result = await api('/api/ai-ingest', 'POST');
+        alert(
+          result.found === 0
+            ? 'No Claude Code transcripts found for this project.'
+            : `Ingested ${result.found} session(s): ${result.created} new, ${result.updated} refreshed.`
+        );
+        renderAiDialog();
+        load();
       });
 
       load();
