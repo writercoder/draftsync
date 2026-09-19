@@ -136,6 +136,18 @@ describe('Serve Integration Tests', () => {
     expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
   });
 
+  it('should build and download an EPUB export', async () => {
+    const res = await fetch(base + '/api/export/epub');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('application/epub+zip');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
+  });
+
+  it('should reject unknown export formats', async () => {
+    expect((await api('/api/export/mobi')).status).toBe(404);
+  });
+
   it('should manage AI events over the API with provider auto-detection', async () => {
     const card = await api('/api/cards', 'POST', { title: 'Chapter 1' });
 
