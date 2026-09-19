@@ -3,37 +3,51 @@
 # Edit this file to customize your EPUB's metadata
 # See: https://pandoc.org/MANUAL.html#epub-metadata
 
-title: "Your Book Title"
-subtitle: "A Compelling Subtitle"
+title: 'Your Book Title'
+subtitle: 'A Compelling Subtitle'
 author:
-  - "Your Name"
+  - 'Your Name'
 creator:
   - role: author
-    text: "Your Name"
+    text: 'Your Name'
 contributor:
   - role: editor
-    text: "Editor Name"
-publisher: "Your Publisher"
-rights: "© 2025 Your Name. All rights reserved."
+    text: 'Editor Name'
+publisher: 'Your Publisher'
+rights: '© 2025 Your Name. All rights reserved.'
 language: en-US
 subject:
-  - "Fiction"
-  - "Genre"
+  - 'Fiction'
+  - 'Genre'
 description: |
   A compelling description of your book that will appear in EPUB metadata.
   This can span multiple lines.
 
 # Publication details
-date: "2025-01-15"
+date: '2025-01-15'
 identifier:
   - scheme: ISBN
-    text: "978-0-00-000000-0"
+    text: '978-0-00-000000-0'
 
 # EPUB-specific settings
-cover-image: "cover.jpg"  # Path to cover image (optional)
-css: "templates/epub.css"  # Path to custom CSS (optional)
+cover-image: 'cover.jpg' # Path to cover image (optional)
+css: 'templates/epub.css' # Path to custom CSS (optional)
 
 # Pandoc options
 toc: true
 toc-depth: 2
 number-sections: false
+# Chapter selection (optional)
+# If specified, only these files will be included in the EPUB (in this order)
+# If omitted, all .md files in content/ are included (except drafts/notes)
+# chapters:
+#   - "content/01-chapter-one.md"
+#   - "content/02-chapter-two.md"
+#   - "content/03-chapter-three.md"
+
+# File exclusion patterns (optional)
+# Files matching these patterns will be excluded from the build
+# Default patterns: ["*.draft.md", "*.notes.md", "_*.md", "drafts/**", "notes/**"]
+# exclude:
+#   - "*.wip.md"
+#   - "archive/**"

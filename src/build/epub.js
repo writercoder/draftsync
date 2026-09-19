@@ -9,22 +9,7 @@ import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { convertMarkdownToEpub, validateEpub } from '../pandoc.js';
-
-/**
- * Get all Markdown files from content directory
- *
- * @param {string} contentDir - Content directory path
- * @returns {Promise<string[]>} Array of Markdown file paths
- */
-async function getMarkdownFiles(contentDir) {
-  const files = await fs.readdir(contentDir);
-  const mdFiles = files
-    .filter(f => f.endsWith('.md'))
-    .sort() // Sort alphabetically for consistent ordering
-    .map(f => path.join(contentDir, f));
-
-  return mdFiles;
-}
+import { getFilesToBuild } from '../file-filter.js';
 
 /**
  * Build EPUB from Markdown files
@@ -52,13 +37,18 @@ export async function buildEpub(options = {}) {
   const spinner = ora();
 
   try {
-    // Step 1: Find all Markdown files
+    // Step 1: Find all Markdown files (respecting exclusions and explicit lists)
     spinner.start('Finding Markdown files');
     const contentDir = 'content';
 
     let mdFiles;
     try {
-      mdFiles = await getMarkdownFiles(contentDir);
+      mdFiles = await getFilesToBuild({
+        contentDir,
+        metadataPath: metadata,
+        includePatterns: options.include,
+        excludePatterns: options.exclude
+      });
     } catch (error) {
       spinner.fail(`Content directory not found: ${contentDir}`);
       console.log(chalk.gray('\nRun "draftsync init" to create the project structure'));
@@ -68,11 +58,12 @@ export async function buildEpub(options = {}) {
     if (mdFiles.length === 0) {
       spinner.fail('No Markdown files found in content/');
       console.log(chalk.gray('\nAdd .md files to content/ directory'));
+      console.log(chalk.gray('Or check your chapters list in metadata.yaml'));
       return;
     }
 
-    spinner.succeed(`Found ${mdFiles.length} Markdown files`);
-    mdFiles.forEach(f => console.log(chalk.gray(`  - ${path.basename(f)}`)));
+    spinner.succeed(`Found ${mdFiles.length} Markdown file(s) for EPUB`);
+    mdFiles.forEach(f => console.log(chalk.gray(`  - ${f}`)));
 
     // Step 2: Check for metadata file
     spinner.start('Checking metadata');

@@ -275,11 +275,16 @@ export function run() {
 
   program
     .command('build:epub')
-    .description('Build EPUB from all Markdown files')
+    .description('Build EPUB from Markdown files')
     .option('-o, --output <path>', 'Output file path', 'dist/book.epub')
     .option('-m, --metadata <path>', 'Metadata YAML file', 'templates/metadata.yaml')
     .option('-c, --css <path>', 'Custom CSS file', 'templates/epub.css')
     .option('--cover <path>', 'Cover image file')
+    .option(
+      '--include <patterns...>',
+      'Include only files matching these patterns (e.g., "chapter-*.md")'
+    )
+    .option('--exclude <patterns...>', 'Exclude files matching these patterns (e.g., "*.draft.md")')
     .action(buildEpub);
 
   program
