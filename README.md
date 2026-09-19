@@ -70,8 +70,19 @@ To sync with Google Docs, you need OAuth2 credentials:
    - Choose "Desktop app" as the application type
    - Download the credentials JSON file
 5. Save the file as `credentials.json` in your project root
+6. Run `draftsync login` — your browser opens for Google's consent page,
+   and the token is cached in `.token.json` (both files are gitignored)
 
-**Note**: The initial authentication flow is not yet fully implemented. See the TODOs in `src/auth.js` for details.
+Notes:
+
+- draftsync requests the `drive.file` scope (access only to files it
+  creates) plus `documents`. Pulling a pre-existing Doc that draftsync did
+  not create is not possible under this scope — push first, then pull.
+- While your OAuth consent screen is in **Testing** mode, add yourself as a
+  test user; Google expires refresh tokens after 7 days in that mode, so
+  re-run `draftsync login` when API calls start failing with
+  `invalid_grant`.
+- `draftsync logout` revokes access and deletes the cached token.
 
 ## Demo
 
@@ -148,6 +159,12 @@ draftsync status
 ### Google Docs Sync
 
 ```bash
+# Authorize with your Google account (browser flow; token cached)
+draftsync login
+
+# Revoke access and delete the cached token
+draftsync logout
+
 # Link a Markdown file to an existing Google Doc
 draftsync link <file.md> <google-doc-id>
 

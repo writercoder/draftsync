@@ -8,7 +8,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { authenticate } from './auth.js';
+import { authenticate, revokeToken, SCOPES } from './auth.js';
 import { createDoc } from './drive.js';
 import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
@@ -156,6 +156,10 @@ async function pushCommand(filePath, options) {
     console.log(chalk.gray(`  View at: https://docs.google.com/document/d/${docId}/edit`));
   } catch (error) {
     console.error(chalk.red(`✗ Error: ${error.message}`));
+    if (error.message.includes('invalid_grant')) {
+      console.log(chalk.gray('  Your Google token may have expired — run "draftsync login"'));
+    }
+    process.exitCode = 1;
   }
 }
 
@@ -201,6 +205,47 @@ async function pullCommand(filePath, options = {}) {
     console.log(chalk.green(`\n✓ Successfully pulled ${filePath}`));
   } catch (error) {
     console.error(chalk.red(`✗ Error: ${error.message}`));
+    if (error.message.includes('invalid_grant')) {
+      console.log(chalk.gray('  Your Google token may have expired — run "draftsync login"'));
+    }
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * Run the interactive Google login flow
+ */
+async function loginCommand() {
+  try {
+    await authenticate({ forceLogin: true });
+    console.log(chalk.green('\n✓ Logged in to Google'));
+    console.log(chalk.gray('  Granted scopes:'));
+    SCOPES.forEach(s => console.log(chalk.gray(`    - ${s}`)));
+    console.log(chalk.gray('  Token cached in .token.json'));
+  } catch (error) {
+    console.error(chalk.red(`✗ Login failed: ${error.message}`));
+    process.exitCode = 1;
+  }
+}
+
+/**
+ * Revoke Google access and delete the cached token
+ */
+async function logoutCommand() {
+  try {
+    const { hadToken, revoked } = await revokeToken();
+    if (!hadToken) {
+      console.log(chalk.gray('Not logged in — no token to revoke.'));
+      return;
+    }
+    if (revoked) {
+      console.log(chalk.green('✓ Token revoked with Google and deleted locally'));
+    } else {
+      console.log(chalk.yellow('✓ Local token deleted (Google revocation failed or not needed)'));
+    }
+  } catch (error) {
+    console.error(chalk.red(`✗ Logout failed: ${error.message}`));
+    process.exitCode = 1;
   }
 }
 
@@ -263,6 +308,16 @@ export function run() {
     .description('Pull a Google Doc to Markdown')
     .option('--dry-run', 'Show what would be done without executing')
     .action(pullCommand);
+
+  program
+    .command('login')
+    .description('Authorize draftsync with your Google account')
+    .action(loginCommand);
+
+  program
+    .command('logout')
+    .description('Revoke Google access and delete the cached token')
+    .action(logoutCommand);
 
   program
     .command('status')
