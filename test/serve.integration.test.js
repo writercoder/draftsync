@@ -90,6 +90,16 @@ describe('Serve Integration Tests', () => {
     expect(badStage.status).toBe(400);
   });
 
+  it('should reject malformed JSON bodies with 400', async () => {
+    const res = await fetch(base + '/api/cards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{not json'
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toMatch(/invalid JSON/);
+  });
+
   it('should 404 unknown cards and routes', async () => {
     expect((await api('/api/cards/999', 'PATCH', { notes: 'x' })).status).toBe(404);
     expect((await api('/api/nope')).status).toBe(404);
