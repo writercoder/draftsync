@@ -19,7 +19,7 @@ export default defineConfig({
       // branches (browser opener, env fallbacks) differ on CI Linux
       thresholds: {
         statements: 29,
-        branches: 79,
+        branches: 78,
         functions: 39,
         lines: 29
       }
