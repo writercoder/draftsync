@@ -73,6 +73,20 @@ To sync with Google Docs, you need OAuth2 credentials:
 
 **Note**: The initial authentication flow is not yet fully implemented. See the TODOs in `src/auth.js` for details.
 
+## Demo
+
+Want to try draftsync without setting up a manuscript? The repo ships a
+ready-to-build example using the five manuscript copies of the Gettysburg
+Address — a real public-domain text with a real revision history:
+
+```bash
+cd examples/gettysburg-address
+../../bin/draftsync.js build:epub
+```
+
+See [examples/gettysburg-address/README.md](examples/gettysburg-address/README.md)
+for draft-exclusion and comparison-edition walkthroughs.
+
 ## Quick Start
 
 ### 1. Initialize a project

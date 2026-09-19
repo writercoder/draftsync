@@ -1,0 +1,9 @@
+{
+  "version": "1.0",
+  "files": {},
+  "config": {
+    "contentDir": "content",
+    "distDir": "dist",
+    "templatesDir": "templates"
+  }
+}

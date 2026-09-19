@@ -1,0 +1,38 @@
+---
+# EPUB Metadata for the Gettysburg Address demo
+# See: https://pandoc.org/MANUAL.html#epub-metadata
+
+title: 'The Gettysburg Address'
+subtitle: 'The Five Manuscript Copies'
+author:
+  - 'Abraham Lincoln'
+creator:
+  - role: author
+    text: 'Abraham Lincoln'
+publisher: 'draftsync example'
+rights: 'Public domain. Transcriptions via Wikisource.'
+language: en-US
+description: |
+  Lincoln's address at the dedication of the Soldiers' National Cemetery,
+  Gettysburg, Pennsylvania, November 19, 1863. This demo edition is built
+  from the Bliss copy, with the four earlier manuscript copies available
+  as drafts.
+
+date: '1863-11-19'
+
+# Pandoc options
+toc: true
+toc-depth: 2
+number-sections: false
+# Chapter selection (optional)
+# By default only content/01-gettysburg-address.md (the Bliss copy) is
+# built — everything under content/drafts/ is excluded automatically.
+#
+# Uncomment to build a comparison edition with all five copies as
+# chapters, in composition order:
+# chapters:
+#   - "content/drafts/01-nicolay-first-draft.md"
+#   - "content/drafts/02-hay-second-draft.md"
+#   - "content/drafts/03-everett-copy.md"
+#   - "content/drafts/04-bancroft-copy.md"
+#   - "content/01-gettysburg-address.md"
