@@ -4,7 +4,6 @@
  * Handles direct manipulation of Google Docs content and formatting.
  */
 
-import { google } from 'googleapis';
 import chalk from 'chalk';
 
 /**

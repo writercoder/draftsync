@@ -54,9 +54,6 @@ describe('Pandoc Integration Tests', () => {
         const outputDocx = join(tempDir, 'out.docx');
         const backMd = join(tempDir, 'back.md');
 
-        // Read original content
-        const originalContent = await fs.readFile(sourceMd, 'utf8');
-
         // Convert MD → DOCX
         mdToDocx(sourceMd, outputDocx);
 

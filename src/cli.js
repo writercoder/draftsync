@@ -8,17 +8,13 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import { authenticate } from './auth.js';
-import { createDoc, listDocs } from './drive.js';
+import { createDoc } from './drive.js';
 import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
 import { buildWeb } from './build/web.js';
 import { previewKdp } from './build/kdp.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const MANIFEST_FILE = '.draftsync.json';
 
@@ -189,7 +185,7 @@ async function pullCommand(filePath, options = {}) {
   }
 
   try {
-    const auth = await authenticate();
+    await authenticate();
     console.log(chalk.green('✓ Authenticated with Google'));
 
     const docxPath = path.join('dist', `${path.basename(filePath, '.md')}.docx`);

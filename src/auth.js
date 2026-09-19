@@ -7,11 +7,7 @@
 import { google } from 'googleapis';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import chalk from 'chalk';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // Paths for credentials and tokens
 const CREDENTIALS_PATH = path.join(process.cwd(), 'credentials.json');
@@ -32,7 +28,7 @@ async function loadCredentials() {
   try {
     const content = await fs.readFile(CREDENTIALS_PATH, 'utf8');
     return JSON.parse(content);
-  } catch (error) {
+  } catch {
     throw new Error(
       'credentials.json not found. ' +
         'Download it from Google Cloud Console and place it in the project root.\n' +
@@ -63,7 +59,7 @@ async function loadToken() {
  *
  * @param {Object} token - Token object to save
  */
-async function saveToken(token) {
+export async function saveToken(token) {
   await fs.writeFile(TOKEN_PATH, JSON.stringify(token, null, 2), 'utf8');
 }
 
@@ -84,7 +80,7 @@ function createOAuth2Client(credentials) {
  * @param {google.auth.OAuth2} oauth2Client - OAuth2 client
  * @returns {string} Authorization URL
  */
-function getAuthUrl(oauth2Client) {
+export function getAuthUrl(oauth2Client) {
   return oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES

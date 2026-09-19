@@ -5,7 +5,6 @@
  */
 
 import { promises as fs } from 'fs';
-import path from 'path';
 import chalk from 'chalk';
 import ora from 'ora';
 import { convertMarkdownToEpub, validateEpub } from '../pandoc.js';
@@ -49,7 +48,7 @@ export async function buildEpub(options = {}) {
         includePatterns: options.include,
         excludePatterns: options.exclude
       });
-    } catch (error) {
+    } catch {
       spinner.fail(`Content directory not found: ${contentDir}`);
       console.log(chalk.gray('\nRun "draftsync init" to create the project structure'));
       return;

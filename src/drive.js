@@ -4,9 +4,7 @@
  * Handles file upload, download, and management in Google Drive.
  */
 
-import { google } from 'googleapis';
 import { promises as fs } from 'fs';
-import path from 'path';
 import chalk from 'chalk';
 
 /**
@@ -166,7 +164,7 @@ export async function exportDocAsDocx(auth, docId, outputPath) {
  * @param {string} [folderId] - Optional folder ID (defaults to root)
  * @returns {Promise<Array<{id: string, name: string}>>} List of documents
  */
-export async function listDocs(auth, folderId = null) {
+export async function listDocs(auth, _folderId = null) {
   console.log(chalk.gray(`  [STUB] Listing Google Docs`));
 
   // TODO: Implement actual Google Drive listing

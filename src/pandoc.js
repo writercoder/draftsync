@@ -97,7 +97,7 @@ export async function checkPandocInstalled() {
   try {
     await execAsync('pandoc --version');
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -143,7 +143,7 @@ export async function convertMarkdownToDocx(mdPath, refdocPath = null) {
   }
 
   try {
-    const { stdout, stderr } = await execAsync(command);
+    const { stderr } = await execAsync(command);
     if (stderr && !stderr.includes('Warning')) {
       console.log(chalk.yellow(`  Pandoc warnings: ${stderr}`));
     }
@@ -178,7 +178,7 @@ export async function convertDocxToMarkdown(docxPath, outputPath) {
   const command = `pandoc "${docxPath}" -o "${outputPath}" --wrap=none --extract-media=.`;
 
   try {
-    const { stdout, stderr } = await execAsync(command);
+    const { stderr } = await execAsync(command);
     if (stderr && !stderr.includes('Warning')) {
       console.log(chalk.yellow(`  Pandoc warnings: ${stderr}`));
     }
@@ -231,7 +231,7 @@ export async function convertMarkdownToHtml(mdPath, outputPath, options = {}) {
   }
 
   try {
-    const { stdout, stderr } = await execAsync(command);
+    const { stderr } = await execAsync(command);
     if (stderr && !stderr.includes('Warning')) {
       console.log(chalk.yellow(`  Pandoc warnings: ${stderr}`));
     }
@@ -286,7 +286,7 @@ export async function convertMarkdownToEpub(mdFiles, outputPath, options = {}) {
   }
 
   try {
-    const { stdout, stderr } = await execAsync(command);
+    const { stderr } = await execAsync(command);
     if (stderr && !stderr.includes('Warning')) {
       console.log(chalk.yellow(`  Pandoc warnings: ${stderr}`));
     }
@@ -307,7 +307,7 @@ export async function validateEpub(epubPath) {
   console.log(chalk.gray(`  Validating ${epubPath}...`));
 
   try {
-    const { stdout, stderr } = await execAsync(`epubcheck "${epubPath}"`);
+    await execAsync(`epubcheck "${epubPath}"`);
     console.log(chalk.green('  ✓ EPUB is valid'));
     return { valid: true, errors: [] };
   } catch (error) {

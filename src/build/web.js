@@ -51,7 +51,7 @@ export async function buildWeb(options = {}) {
     let mdFiles;
     try {
       mdFiles = await getMarkdownFiles(contentDir);
-    } catch (error) {
+    } catch {
       spinner.fail(`Content directory not found: ${contentDir}`);
       console.log(chalk.gray('\nRun "draftsync init" to create the project structure'));
       return;
