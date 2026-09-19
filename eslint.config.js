@@ -33,5 +33,13 @@ export default [
       'prefer-const': 'error',
       'no-var': 'error'
     }
+  },
+  {
+    // Tests run on the same Node matrix but may use globals (fetch) that
+    // are present-but-experimental on Node 18
+    files: ['test/**'],
+    rules: {
+      'n/no-unsupported-features/node-builtins': 'off'
+    }
   }
 ];

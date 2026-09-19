@@ -1,0 +1,188 @@
+/**
+ * Local Kanban Server
+ *
+ * Serves a web-based kanban board for tracking the current project's
+ * writing pipeline. Data lives in the SQLite store (~/.draftsync);
+ * the server binds to localhost only.
+ */
+
+import http from 'http';
+import { promises as fs } from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
+import chalk from 'chalk';
+import { openStore, getDataDir, STAGES } from './store.js';
+import { getAllMarkdownFiles, filterExcludedFiles } from './file-filter.js';
+
+const UI_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'kanban.html');
+
+/**
+ * Read and JSON-parse a request body (up to 1MB)
+ *
+ * @param {http.IncomingMessage} req - Request
+ * @returns {Promise<Object>} Parsed body ({} when empty)
+ */
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', chunk => {
+      data += chunk;
+      if (data.length > 1e6) reject(new Error('body too large'));
+    });
+    req.on('end', () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch {
+        reject(new Error('invalid JSON'));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+/**
+ * Derive a card title from a Markdown file (first H1, else basename)
+ *
+ * @param {string} filePath - Path to the Markdown file
+ * @returns {Promise<string>} Title
+ */
+async function titleFromFile(filePath) {
+  try {
+    const content = await fs.readFile(filePath, 'utf8');
+    const h1 = content.match(/^#\s+(.+)$/m);
+    if (h1) return h1[1].trim();
+  } catch {
+    // fall through to basename
+  }
+  return path.basename(filePath, '.md');
+}
+
+/**
+ * Create the kanban HTTP server for a project directory
+ *
+ * @param {Object} options
+ * @param {import('./store.js').Store} options.store - Open store
+ * @param {string} options.projectPath - Absolute project directory
+ * @returns {http.Server} Configured server (not yet listening)
+ */
+export function createKanbanServer({ store, projectPath }) {
+  const project = store.getOrCreateProject(projectPath);
+
+  return http.createServer(async (req, res) => {
+    const send = (status, body, type = 'application/json') => {
+      res.writeHead(status, { 'Content-Type': type });
+      res.end(type === 'application/json' ? JSON.stringify(body) : body);
+    };
+
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      const cardMatch = url.pathname.match(/^\/api\/cards\/(\d+)$/);
+
+      if (req.method === 'GET' && url.pathname === '/') {
+        const html = await fs.readFile(UI_PATH, 'utf8');
+        return send(200, html, 'text/html; charset=utf-8');
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/board') {
+        return send(200, {
+          project: { name: project.name, path: project.path },
+          stages: STAGES,
+          cards: store.listCards(project.id)
+        });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/cards') {
+        const body = await readBody(req);
+        const card = store.createCard(project.id, body);
+        return send(201, card);
+      }
+
+      if (req.method === 'PATCH' && cardMatch) {
+        const id = Number(cardMatch[1]);
+        const existing = store.getCard(id);
+        if (!existing || existing.project_id !== project.id) {
+          return send(404, { error: 'card not found' });
+        }
+        const body = await readBody(req);
+        let card = store.updateCard(id, body);
+        if (body.stage !== undefined || body.index !== undefined) {
+          card = store.moveCard(id, body.stage ?? card.stage, body.index);
+        }
+        return send(200, card);
+      }
+
+      if (req.method === 'DELETE' && cardMatch) {
+        const id = Number(cardMatch[1]);
+        const existing = store.getCard(id);
+        if (!existing || existing.project_id !== project.id) {
+          return send(404, { error: 'card not found' });
+        }
+        store.deleteCard(id);
+        return send(200, { deleted: true });
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/import') {
+        const contentDir = path.join(projectPath, 'content');
+        let files;
+        try {
+          files = filterExcludedFiles(await getAllMarkdownFiles(contentDir));
+        } catch {
+          return send(400, { error: 'no content/ directory in this project' });
+        }
+        const linked = store.linkedFiles(project.id);
+        const imported = [];
+        for (const file of files) {
+          const relative = path.relative(projectPath, file);
+          if (linked.has(relative)) continue;
+          imported.push(
+            store.createCard(project.id, {
+              title: await titleFromFile(file),
+              stage: 'drafting',
+              file: relative
+            })
+          );
+        }
+        return send(200, { imported: imported.length, cards: imported });
+      }
+
+      return send(404, { error: 'not found' });
+    } catch (error) {
+      return send(400, { error: error.message });
+    }
+  });
+}
+
+/**
+ * `draftsync serve` command: start the board for the current project
+ *
+ * @param {Object} options - CLI options
+ * @param {string} [options.port='8787'] - Port to listen on
+ * @returns {Promise<void>}
+ */
+export async function serveCommand(options = {}) {
+  const port = Number(options.port || 8787);
+  const store = openStore();
+  const server = createKanbanServer({ store, projectPath: process.cwd() });
+
+  server.listen(port, '127.0.0.1', () => {
+    const url = `http://localhost:${port}`;
+    console.log(chalk.blue.bold('\ndraftsync board\n'));
+    console.log(chalk.green(`✓ Serving ${path.basename(process.cwd())} at ${url}`));
+    console.log(chalk.gray(`  Data: ${path.join(getDataDir(), 'draftsync.db')}`));
+    console.log(chalk.gray('  Press Ctrl+C to stop\n'));
+    const opener =
+      process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+    const child = spawn(opener, [url], { stdio: 'ignore', detached: true });
+    child.on('error', () => {});
+    child.unref();
+  });
+
+  server.on('error', error => {
+    console.error(chalk.red(`✗ Could not start server: ${error.message}`));
+    if (error.code === 'EADDRINUSE') {
+      console.log(chalk.gray(`  Port ${port} is in use — try --port ${port + 1}`));
+    }
+    process.exitCode = 1;
+  });
+}

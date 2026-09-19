@@ -205,6 +205,20 @@ draftsync build:web [options]
 draftsync preview:kdp [file.epub]
 ```
 
+### Project Board
+
+```bash
+# Serve a local web kanban board for this project
+draftsync serve [--port 8787]
+```
+
+Opens a browser board with stages Outline → Drafting → Revision → Beta →
+Done. Cards can be added by hand or seeded from `content/*.md` via the
+"Import chapters" button (drafts and notes are excluded, matching the
+build filters). Data is stored locally in `~/.draftsync/draftsync.db` —
+one database, projects keyed by directory, so every draftsync project
+gets its own board.
+
 ## Workflow Examples
 
 ### Writing and Publishing Workflow

@@ -14,6 +14,7 @@ import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
 import { buildDocx } from './build/docx.js';
+import { serveCommand } from './serve.js';
 import { buildWeb } from './build/web.js';
 import { previewKdp } from './build/kdp.js';
 
@@ -379,6 +380,12 @@ export function run() {
     .description('Build static HTML from Markdown files')
     .option('-o, --output <dir>', 'Output directory', 'dist/web')
     .action(buildWeb);
+
+  program
+    .command('serve')
+    .description('Serve the local kanban board for this project')
+    .option('-p, --port <port>', 'Port to listen on', '8787')
+    .action(serveCommand);
 
   program
     .command('preview:kdp')

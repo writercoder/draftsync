@@ -1,0 +1,399 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>draftsync board</title>
+    <style>
+      :root {
+        --ground: #fbfaf7;
+        --column: #f0eee7;
+        --card: #ffffff;
+        --ink: #232830;
+        --muted: #6b7480;
+        --accent: #2f5a8f;
+        --line: #e0ddd4;
+        --danger: #b5342e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #14171c;
+          --column: #1b2027;
+          --card: #232a33;
+          --ink: #e9e6df;
+          --muted: #99a1ab;
+          --accent: #7fa8d9;
+          --line: #2a3038;
+          --danger: #e06054;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font:
+          15px/1.5 -apple-system,
+          'Segoe UI',
+          system-ui,
+          sans-serif;
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        font-size: 1.1rem;
+        margin: 0;
+      }
+      header .path {
+        color: var(--muted);
+        font-size: 0.8rem;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      button {
+        font: inherit;
+        color: var(--ink);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.35rem 0.8rem;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 1px;
+      }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+      }
+      button.danger {
+        color: var(--danger);
+      }
+
+      .board {
+        flex: 1;
+        display: flex;
+        gap: 0.9rem;
+        padding: 1.1rem 1.5rem 1.5rem;
+        overflow-x: auto;
+        align-items: flex-start;
+      }
+      .column {
+        background: var(--column);
+        border-radius: 8px;
+        min-width: 240px;
+        width: 240px;
+        max-height: 100%;
+        display: flex;
+        flex-direction: column;
+      }
+      .column h2 {
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0;
+        padding: 0.75rem 0.9rem 0.4rem;
+        display: flex;
+        justify-content: space-between;
+      }
+      .cards {
+        padding: 0.3rem 0.6rem;
+        overflow-y: auto;
+        min-height: 2.2rem;
+        flex: 1;
+      }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.5rem 0.7rem;
+        margin-bottom: 0.5rem;
+        cursor: grab;
+      }
+      .card:hover {
+        border-color: var(--accent);
+      }
+      .card .file {
+        display: block;
+        color: var(--muted);
+        font-size: 0.72rem;
+        margin-top: 0.2rem;
+        overflow-wrap: anywhere;
+      }
+      .card.dragging {
+        opacity: 0.4;
+      }
+      .cards.dragover {
+        outline: 2px dashed var(--accent);
+        outline-offset: -4px;
+        border-radius: 6px;
+      }
+      .add {
+        border: none;
+        background: none;
+        color: var(--muted);
+        text-align: left;
+        padding: 0.4rem 0.9rem 0.7rem;
+        cursor: pointer;
+      }
+      .add:hover {
+        color: var(--accent);
+      }
+      .add-input {
+        font: inherit;
+        margin: 0 0.6rem 0.6rem;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid var(--accent);
+        border-radius: 6px;
+        background: var(--card);
+        color: var(--ink);
+      }
+
+      dialog {
+        background: var(--card);
+        color: var(--ink);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 1.2rem 1.4rem;
+        width: min(30rem, 92vw);
+      }
+      dialog::backdrop {
+        background: rgba(0, 0, 0, 0.35);
+      }
+      dialog label {
+        display: block;
+        font-size: 0.78rem;
+        color: var(--muted);
+        margin: 0.8rem 0 0.25rem;
+      }
+      dialog input[type='text'],
+      dialog textarea {
+        width: 100%;
+        font: inherit;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--ground);
+        color: var(--ink);
+      }
+      dialog textarea {
+        min-height: 6rem;
+        resize: vertical;
+      }
+      .dialog-actions {
+        display: flex;
+        justify-content: space-between;
+        margin-top: 1.1rem;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 2rem;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1 id="project-name">draftsync board</h1>
+      <span class="path" id="project-path"></span>
+      <button id="import">Import chapters</button>
+    </header>
+    <div class="board" id="board"></div>
+
+    <dialog id="editor">
+      <form method="dialog" id="editor-form">
+        <label for="edit-title">Title</label>
+        <input type="text" id="edit-title" required />
+        <label for="edit-notes">Notes</label>
+        <textarea id="edit-notes" placeholder="Status, feedback to address, next steps…"></textarea>
+        <label for="edit-file">Linked file</label>
+        <input type="text" id="edit-file" placeholder="content/01-chapter.md" />
+        <div class="dialog-actions">
+          <button type="button" class="danger" id="edit-delete">Delete</button>
+          <span>
+            <button type="button" id="edit-cancel">Cancel</button>
+            <button type="submit" class="primary">Save</button>
+          </span>
+        </div>
+      </form>
+    </dialog>
+
+    <script>
+      let state = { stages: [], cards: [] };
+      let editing = null;
+
+      const api = async (path, method = 'GET', body) => {
+        const res = await fetch(path, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+        return res.json();
+      };
+
+      const load = async () => {
+        const board = await api('/api/board');
+        state = board;
+        document.getElementById('project-name').textContent = board.project.name;
+        document.getElementById('project-path').textContent = board.project.path;
+        document.title = board.project.name + ' · draftsync board';
+        render();
+      };
+
+      const render = () => {
+        const root = document.getElementById('board');
+        root.innerHTML = '';
+        for (const stage of state.stages) {
+          const cards = state.cards.filter(c => c.stage === stage.key);
+          const col = document.createElement('div');
+          col.className = 'column';
+
+          const h = document.createElement('h2');
+          h.innerHTML = `<span>${stage.label}</span><span>${cards.length}</span>`;
+          col.appendChild(h);
+
+          const list = document.createElement('div');
+          list.className = 'cards';
+          list.dataset.stage = stage.key;
+          list.addEventListener('dragover', e => {
+            e.preventDefault();
+            list.classList.add('dragover');
+          });
+          list.addEventListener('dragleave', () => list.classList.remove('dragover'));
+          list.addEventListener('drop', onDrop);
+
+          for (const card of cards) {
+            const el = document.createElement('div');
+            el.className = 'card';
+            el.draggable = true;
+            el.dataset.id = card.id;
+            el.textContent = card.title;
+            if (card.file) {
+              const f = document.createElement('span');
+              f.className = 'file';
+              f.textContent = card.file;
+              el.appendChild(f);
+            }
+            el.addEventListener('dragstart', () => el.classList.add('dragging'));
+            el.addEventListener('dragend', () => el.classList.remove('dragging'));
+            el.addEventListener('click', () => openEditor(card));
+            list.appendChild(el);
+          }
+          col.appendChild(list);
+
+          const add = document.createElement('button');
+          add.className = 'add';
+          add.textContent = '+ Add card';
+          add.addEventListener('click', () => addCard(list, stage.key, add));
+          col.appendChild(add);
+
+          root.appendChild(col);
+        }
+        if (state.cards.length === 0) {
+          const hint = document.createElement('div');
+          hint.className = 'empty';
+          hint.textContent =
+            'No cards yet — add one, or use "Import chapters" to seed the board from content/.';
+          root.appendChild(hint);
+        }
+      };
+
+      const onDrop = async e => {
+        e.preventDefault();
+        const list = e.currentTarget;
+        list.classList.remove('dragover');
+        const dragged = document.querySelector('.card.dragging');
+        if (!dragged) return;
+        const cardsBelow = [...list.querySelectorAll('.card:not(.dragging)')];
+        const index = cardsBelow.filter(c => {
+          const r = c.getBoundingClientRect();
+          return e.clientY > r.top + r.height / 2;
+        }).length;
+        await api(`/api/cards/${dragged.dataset.id}`, 'PATCH', {
+          stage: list.dataset.stage,
+          index
+        });
+        load();
+      };
+
+      const addCard = (list, stage, addButton) => {
+        if (list.querySelector('.add-input')) return;
+        const input = document.createElement('input');
+        input.className = 'add-input';
+        input.placeholder = 'Card title…';
+        const done = async commit => {
+          const title = input.value.trim();
+          input.remove();
+          if (commit && title) {
+            await api('/api/cards', 'POST', { title, stage });
+            load();
+          }
+        };
+        input.addEventListener('keydown', e => {
+          if (e.key === 'Enter') done(true);
+          if (e.key === 'Escape') done(false);
+        });
+        input.addEventListener('blur', () => done(true));
+        list.parentElement.insertBefore(input, addButton);
+        input.focus();
+      };
+
+      const openEditor = card => {
+        editing = card;
+        document.getElementById('edit-title').value = card.title;
+        document.getElementById('edit-notes').value = card.notes || '';
+        document.getElementById('edit-file').value = card.file || '';
+        document.getElementById('editor').showModal();
+      };
+
+      document.getElementById('editor-form').addEventListener('submit', async () => {
+        await api(`/api/cards/${editing.id}`, 'PATCH', {
+          title: document.getElementById('edit-title').value,
+          notes: document.getElementById('edit-notes').value,
+          file: document.getElementById('edit-file').value || null
+        });
+        load();
+      });
+      document
+        .getElementById('edit-cancel')
+        .addEventListener('click', () => document.getElementById('editor').close());
+      document.getElementById('edit-delete').addEventListener('click', async () => {
+        if (!confirm('Delete this card?')) return;
+        await api(`/api/cards/${editing.id}`, 'DELETE');
+        document.getElementById('editor').close();
+        load();
+      });
+      document.getElementById('import').addEventListener('click', async () => {
+        try {
+          const result = await api('/api/import', 'POST');
+          if (result.imported === 0) alert('Nothing new to import from content/.');
+          load();
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+
+      load();
+    </script>
+  </body>
+</html>
