@@ -9,7 +9,7 @@ import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { authenticate, revokeToken, SCOPES } from './auth.js';
-import { createDoc } from './drive.js';
+import { createDoc, updateDoc, exportDocAsDocx } from './drive.js';
 import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
@@ -132,8 +132,12 @@ async function pushCommand(filePath, options) {
     let docId;
     if (fileInfo && fileInfo.gdocId) {
       // Update existing doc
-      console.log(chalk.gray(`  Updating existing doc: ${fileInfo.gdocId}`));
       docId = fileInfo.gdocId;
+      await updateDoc(auth, docId, docxPath);
+      console.log(chalk.green(`✓ Updated existing Google Doc: ${docId}`));
+
+      manifest.files[filePath].lastSync = new Date().toISOString();
+      await saveManifest(manifest);
     } else {
       // Create new doc
       docId = await createDoc(auth, path.basename(filePath, '.md'), docxPath, options.folderId);
@@ -189,12 +193,13 @@ async function pullCommand(filePath, options = {}) {
   }
 
   try {
-    await authenticate();
+    const auth = await authenticate();
     console.log(chalk.green('✓ Authenticated with Google'));
 
+    await fs.mkdir('dist', { recursive: true });
     const docxPath = path.join('dist', `${path.basename(filePath, '.md')}.docx`);
-    // TODO: Actually export from Google Docs
-    console.log(chalk.gray(`  Downloaded to ${docxPath}`));
+    await exportDocAsDocx(auth, fileInfo.gdocId, docxPath);
+    console.log(chalk.green(`✓ Exported Google Doc to ${docxPath}`));
 
     await convertDocxToMarkdown(docxPath, filePath);
     console.log(chalk.green(`✓ Converted to Markdown: ${filePath}`));
