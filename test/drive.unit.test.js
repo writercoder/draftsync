@@ -56,6 +56,14 @@ describe('Drive Unit Tests', () => {
     return docxPath;
   }
 
+  // The mocked client never consumes the upload stream, so close it before
+  // the temp dir is removed — otherwise its lazy open races teardown and
+  // emits an unhandled ENOENT
+  function closeUploadStream(call) {
+    call.media.body.on('error', () => {});
+    call.media.body.destroy();
+  }
+
   describe('createDoc', () => {
     it('should upload DOCX with conversion to Google Docs format', async () => {
       const docxPath = await makeDocx();
@@ -70,13 +78,16 @@ describe('Drive Unit Tests', () => {
       });
       expect(call.media.mimeType).toBe(DOCX_MIME);
       expect(call.fields).toBe('id');
+      closeUploadStream(call);
     });
 
     it('should place the doc in a folder when folderId is given', async () => {
       const docxPath = await makeDocx();
       await createDoc(AUTH, 'My Chapter', docxPath, 'folder-9');
 
-      expect(files.create.mock.calls[0][0].requestBody.parents).toEqual(['folder-9']);
+      const call = files.create.mock.calls[0][0];
+      expect(call.requestBody.parents).toEqual(['folder-9']);
+      closeUploadStream(call);
     });
   });
 
@@ -88,6 +99,7 @@ describe('Drive Unit Tests', () => {
       const call = files.update.mock.calls[0][0];
       expect(call.fileId).toBe('doc123');
       expect(call.media.mimeType).toBe(DOCX_MIME);
+      closeUploadStream(call);
     });
   });
 
