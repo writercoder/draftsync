@@ -1,22 +1,40 @@
 /**
  * Google Docs API Operations
  *
- * Handles direct manipulation of Google Docs content and formatting.
+ * Handles direct manipulation of Google Docs content and formatting via
+ * documents.get / documents.batchUpdate. Request payloads are built by
+ * pure functions so they can be unit-tested offline.
+ *
+ * Known API limitation: the Docs API has no request type for automatic
+ * page-number fields, so manuscript footers with page numbers cannot be
+ * applied programmatically — add them once in the Docs UI if needed.
  */
 
-import chalk from 'chalk';
+import { google } from 'googleapis';
 
 /**
- * Build house style formatting requests for Google Docs API
+ * Build manuscript formatting requests for documents.batchUpdate
+ *
+ * Standard manuscript style: 1-inch margins, double-spaced 12pt serif body.
+ * The paragraph and text ranges need the real end index of the document
+ * body (from documents.get) — the API rejects placeholder ranges.
  *
  * @param {Object} options - Formatting options
+ * @param {number} options.bodyEndIndex - End index of the document body
  * @param {number} [options.marginsInch=1] - Margin size in inches
- * @param {boolean} [options.doubleSpacing=true] - Apply double spacing
- * @param {string} [options.headerText] - Header text to apply
+ * @param {number} [options.lineSpacing=2] - Line spacing multiplier (2 = double)
+ * @param {string} [options.fontFamily='Times New Roman'] - Body font family
+ * @param {number} [options.fontSize=12] - Body font size in points
  * @returns {Array} Array of batchUpdate request objects
  */
-export function buildHouseStyleRequests(options = {}) {
-  const { marginsInch = 1, doubleSpacing = true, headerText = null } = options;
+export function buildManuscriptRequests(options) {
+  const {
+    bodyEndIndex,
+    marginsInch = 1,
+    lineSpacing = 2,
+    fontFamily = 'Times New Roman',
+    fontSize = 12
+  } = options;
 
   const requests = [];
 
@@ -34,155 +52,170 @@ export function buildHouseStyleRequests(options = {}) {
     }
   });
 
-  // Set line spacing for all paragraphs
-  if (doubleSpacing) {
-    requests.push({
-      updateParagraphStyle: {
-        range: {
-          startIndex: 1,
-          endIndex: -1
-        },
-        paragraphStyle: {
-          lineSpacing: 200 // 200% = double spacing
-        },
-        fields: 'lineSpacing'
-      }
-    });
-  }
-
-  // Add header text if provided
-  if (headerText) {
-    requests.push({
-      createHeader: {
-        type: 'DEFAULT',
-        sectionBreakLocation: {
-          index: 1
+  // Body ranges exclude the final newline of the last paragraph
+  const bodyRange = { startIndex: 1, endIndex: bodyEndIndex - 1 };
+  if (bodyRange.endIndex > bodyRange.startIndex) {
+    if (lineSpacing) {
+      requests.push({
+        updateParagraphStyle: {
+          range: bodyRange,
+          paragraphStyle: {
+            lineSpacing: lineSpacing * 100 // API uses percentage
+          },
+          fields: 'lineSpacing'
         }
-      }
-    });
-    // Note: Actual header text insertion would require additional requests
-    // This is a simplified version for testing
+      });
+    }
+
+    if (fontFamily || fontSize) {
+      const textStyle = {};
+      if (fontFamily) textStyle.weightedFontFamily = { fontFamily };
+      if (fontSize) textStyle.fontSize = { magnitude: fontSize, unit: 'PT' };
+      requests.push({
+        updateTextStyle: {
+          range: bodyRange,
+          textStyle,
+          fields: Object.keys(textStyle).join(',')
+        }
+      });
+    }
   }
 
   return requests;
 }
 
 /**
+ * Build requests that replace a header segment's content with new text
+ *
+ * @param {string} headerId - Header segment ID
+ * @param {string} text - Header text to set
+ * @param {number} [existingEndIndex=1] - Current end index of the header
+ *   segment (1 means empty: just the final newline)
+ * @returns {Array} Array of batchUpdate request objects
+ */
+export function buildHeaderTextRequests(headerId, text, existingEndIndex = 1) {
+  const requests = [];
+
+  // Clear existing header content (the final newline cannot be deleted)
+  if (existingEndIndex > 1) {
+    requests.push({
+      deleteContentRange: {
+        range: { segmentId: headerId, startIndex: 0, endIndex: existingEndIndex - 1 }
+      }
+    });
+  }
+
+  requests.push({
+    insertText: {
+      location: { segmentId: headerId, index: 0 },
+      text
+    }
+  });
+
+  return requests;
+}
+
+/**
+ * Get the end index of a document body from a documents.get response
+ *
+ * @param {Object} document - documents.get response data
+ * @returns {number} End index of the last body element (1 for empty docs)
+ */
+export function getBodyEndIndex(document) {
+  const content = document.body?.content || [];
+  return content.length > 0 ? content[content.length - 1].endIndex : 1;
+}
+
+/**
+ * Extract the plain text of a document from a documents.get response
+ *
+ * @param {Object} document - documents.get response data
+ * @returns {string} Concatenated text content of the body
+ */
+export function extractText(document) {
+  const content = document.body?.content || [];
+  let text = '';
+  for (const element of content) {
+    for (const pe of element.paragraph?.elements || []) {
+      text += pe.textRun?.content || '';
+    }
+  }
+  return text;
+}
+
+/**
  * Apply manuscript formatting to a Google Doc
  *
- * Applies standard manuscript formatting:
- * - Double-spaced paragraphs (line spacing: 2.0)
- * - 1-inch margins on all sides
- * - Header with "Surname / Short Title"
- * - Footer with page numbers
- *
- * TODO: Implement actual Google Docs API formatting
- * - Use the documents.batchUpdate method
- * - Apply paragraph styles for line spacing
- * - Set page margins via document style
- * - Create header with custom text
- * - Add page numbers to footer
+ * Applies standard manuscript formatting: 1-inch margins, double-spaced
+ * 12pt serif body, and a header ("Author / Title" style). Page-number
+ * footers are not supported by the Docs API (see module header).
  *
  * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
  * @param {string} docId - Google Doc ID
  * @param {Object} [options] - Formatting options
- * @param {string} [options.headerText] - Custom header text
- * @param {number} [options.lineSpacing=2.0] - Line spacing multiplier
+ * @param {string} [options.headerText] - Header text (defaults to doc title)
+ * @param {number} [options.marginsInch=1] - Margin size in inches
+ * @param {number} [options.lineSpacing=2] - Line spacing multiplier
+ * @param {string} [options.fontFamily='Times New Roman'] - Body font family
+ * @param {number} [options.fontSize=12] - Body font size in points
  * @returns {Promise<void>}
  */
 export async function formatDocument(auth, docId, options = {}) {
-  const { headerText = 'Author / Title', lineSpacing = 2.0 } = options;
+  const docs = google.docs({ version: 'v1', auth });
 
-  console.log(chalk.gray(`  [STUB] Applying manuscript formatting to ${docId}`));
+  const { data: document } = await docs.documents.get({ documentId: docId });
 
-  // TODO: Implement actual Google Docs API formatting
-  // const docs = google.docs({ version: 'v1', auth });
-  //
-  // // Build batch update requests
-  // const requests = [
-  //   // Set document margins (1 inch = 72 points)
-  //   {
-  //     updateDocumentStyle: {
-  //       documentStyle: {
-  //         marginTop: { magnitude: 72, unit: 'PT' },
-  //         marginBottom: { magnitude: 72, unit: 'PT' },
-  //         marginLeft: { magnitude: 72, unit: 'PT' },
-  //         marginRight: { magnitude: 72, unit: 'PT' }
-  //       },
-  //       fields: 'marginTop,marginBottom,marginLeft,marginRight'
-  //     }
-  //   },
-  //   // Set line spacing for all paragraphs
-  //   {
-  //     updateParagraphStyle: {
-  //       range: {
-  //         startIndex: 1,
-  //         endIndex: -1  // End of document
-  //       },
-  //       paragraphStyle: {
-  //         lineSpacing: lineSpacing * 100  // API uses percentage
-  //       },
-  //       fields: 'lineSpacing'
-  //     }
-  //   }
-  //   // TODO: Add header and footer formatting
-  // ];
-  //
-  // await docs.documents.batchUpdate({
-  //   documentId: docId,
-  //   requestBody: {
-  //     requests
-  //   }
-  // });
+  // Body formatting
+  const requests = buildManuscriptRequests({
+    ...options,
+    bodyEndIndex: getBodyEndIndex(document)
+  });
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: { requests }
+  });
 
-  console.log(chalk.gray(`  [STUB] Would apply:`));
-  console.log(chalk.gray(`    - Line spacing: ${lineSpacing}`));
-  console.log(chalk.gray(`    - Margins: 1 inch`));
-  console.log(chalk.gray(`    - Header: ${headerText}`));
-  console.log(chalk.gray(`    - Footer: Page numbers`));
+  // Header: reuse the existing default header or create one
+  const headerText = options.headerText || document.title || 'Untitled';
+  let headerId = document.documentStyle?.defaultHeaderId;
+  let existingEndIndex = 1;
+
+  if (headerId) {
+    const headerContent = document.headers?.[headerId]?.content || [];
+    existingEndIndex =
+      headerContent.length > 0 ? headerContent[headerContent.length - 1].endIndex : 1;
+  } else {
+    const { data: reply } = await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: { requests: [{ createHeader: { type: 'DEFAULT' } }] }
+    });
+    headerId = reply.replies?.[0]?.createHeader?.headerId;
+  }
+
+  if (headerId) {
+    await docs.documents.batchUpdate({
+      documentId: docId,
+      requestBody: { requests: buildHeaderTextRequests(headerId, headerText, existingEndIndex) }
+    });
+  }
 }
 
 /**
  * Get the content of a Google Doc
  *
- * TODO: Implement actual content retrieval
- * - Fetch document content via Docs API
- * - Parse structured content
- * - Return text and formatting information
- *
  * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
  * @param {string} docId - Google Doc ID
- * @returns {Promise<Object>} Document content
+ * @returns {Promise<Object>} Full documents.get response data (use
+ *   extractText() to get the plain text)
  */
 export async function getDocumentContent(auth, docId) {
-  console.log(chalk.gray(`  [STUB] Getting content for ${docId}`));
-
-  // TODO: Implement actual content retrieval
-  // const docs = google.docs({ version: 'v1', auth });
-  //
-  // const response = await docs.documents.get({
-  //   documentId: docId
-  // });
-  //
-  // return response.data;
-
-  // Stub: return empty document
-  return {
-    documentId: docId,
-    title: 'Untitled Document',
-    body: {
-      content: []
-    }
-  };
+  const docs = google.docs({ version: 'v1', auth });
+  const response = await docs.documents.get({ documentId: docId });
+  return response.data;
 }
 
 /**
  * Insert text into a Google Doc
- *
- * TODO: Implement text insertion
- * - Use documents.batchUpdate
- * - Insert text at specified location
- * - Optionally apply formatting
  *
  * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
  * @param {string} docId - Google Doc ID
@@ -191,74 +224,58 @@ export async function getDocumentContent(auth, docId) {
  * @returns {Promise<void>}
  */
 export async function insertText(auth, docId, text, index = 1) {
-  console.log(chalk.gray(`  [STUB] Inserting text into ${docId}`));
+  const docs = google.docs({ version: 'v1', auth });
 
-  // TODO: Implement actual text insertion
-  // const docs = google.docs({ version: 'v1', auth });
-  //
-  // await docs.documents.batchUpdate({
-  //   documentId: docId,
-  //   requestBody: {
-  //     requests: [
-  //       {
-  //         insertText: {
-  //           location: {
-  //             index
-  //           },
-  //           text
-  //         }
-  //       }
-  //     ]
-  //   }
-  // });
-
-  console.log(chalk.gray(`  [STUB] Would insert ${text.length} characters at index ${index}`));
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [{ insertText: { location: { index }, text } }]
+    }
+  });
 }
 
 /**
- * Apply formatting to a range in a Google Doc
- *
- * TODO: Implement range formatting
- * - Apply bold, italic, underline
- * - Set font family and size
- * - Apply text color
+ * Apply text formatting to a range in a Google Doc
  *
  * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
  * @param {string} docId - Google Doc ID
  * @param {number} startIndex - Start of range
  * @param {number} endIndex - End of range
  * @param {Object} formatting - Formatting to apply
+ * @param {boolean} [formatting.bold] - Bold on/off
+ * @param {boolean} [formatting.italic] - Italic on/off
+ * @param {boolean} [formatting.underline] - Underline on/off
+ * @param {number} [formatting.fontSize] - Font size in points
+ * @param {string} [formatting.fontFamily] - Font family name
  * @returns {Promise<void>}
  */
-export async function formatRange(auth, docId, startIndex, endIndex, formatting) {
-  console.log(chalk.gray(`  [STUB] Formatting range ${startIndex}-${endIndex} in ${docId}`));
+export async function formatRange(auth, docId, startIndex, endIndex, formatting = {}) {
+  const textStyle = {};
+  if (formatting.bold !== undefined) textStyle.bold = formatting.bold;
+  if (formatting.italic !== undefined) textStyle.italic = formatting.italic;
+  if (formatting.underline !== undefined) textStyle.underline = formatting.underline;
+  if (formatting.fontSize) textStyle.fontSize = { magnitude: formatting.fontSize, unit: 'PT' };
+  if (formatting.fontFamily) {
+    textStyle.weightedFontFamily = { fontFamily: formatting.fontFamily };
+  }
 
-  // TODO: Implement actual range formatting
-  // const docs = google.docs({ version: 'v1', auth });
-  //
-  // const textStyle = {};
-  // if (formatting.bold !== undefined) textStyle.bold = formatting.bold;
-  // if (formatting.italic !== undefined) textStyle.italic = formatting.italic;
-  // if (formatting.fontSize) textStyle.fontSize = { magnitude: formatting.fontSize, unit: 'PT' };
-  // if (formatting.fontFamily) textStyle.weightedFontFamily = { fontFamily: formatting.fontFamily };
-  //
-  // await docs.documents.batchUpdate({
-  //   documentId: docId,
-  //   requestBody: {
-  //     requests: [
-  //       {
-  //         updateTextStyle: {
-  //           range: {
-  //             startIndex,
-  //             endIndex
-  //           },
-  //           textStyle,
-  //           fields: Object.keys(textStyle).join(',')
-  //         }
-  //       }
-  //     ]
-  //   }
-  // });
+  if (Object.keys(textStyle).length === 0) {
+    throw new Error('formatRange: no formatting options given');
+  }
 
-  console.log(chalk.gray(`  [STUB] Would apply formatting:`, formatting));
+  const docs = google.docs({ version: 'v1', auth });
+  await docs.documents.batchUpdate({
+    documentId: docId,
+    requestBody: {
+      requests: [
+        {
+          updateTextStyle: {
+            range: { startIndex, endIndex },
+            textStyle,
+            fields: Object.keys(textStyle).join(',')
+          }
+        }
+      ]
+    }
+  });
 }

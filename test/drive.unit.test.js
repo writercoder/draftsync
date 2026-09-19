@@ -23,7 +23,8 @@ import {
   exportDocAsDocx,
   listDocs,
   getDocMetadata,
-  trashDoc
+  trashDoc,
+  ensureFolder
 } from '../src/drive.js';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -158,6 +159,42 @@ describe('Drive Unit Tests', () => {
         fileId: 'doc123',
         fields: 'id, name, createdTime, modifiedTime, webViewLink'
       });
+    });
+  });
+
+  describe('ensureFolder', () => {
+    it('should return the existing folder without creating one', async () => {
+      files.list.mockResolvedValue({ data: { files: [{ id: 'folder-1', name: 'draftsync' }] } });
+
+      const result = await ensureFolder(AUTH);
+
+      expect(result).toEqual({ id: 'folder-1', created: false });
+      expect(files.list.mock.calls[0][0].q).toBe(
+        "mimeType='application/vnd.google-apps.folder' and name='draftsync' and trashed=false"
+      );
+      expect(files.create).not.toHaveBeenCalled();
+    });
+
+    it('should create the folder when none exists', async () => {
+      files.list.mockResolvedValue({ data: { files: [] } });
+      files.create.mockResolvedValue({ data: { id: 'folder-new' } });
+
+      const result = await ensureFolder(AUTH);
+
+      expect(result).toEqual({ id: 'folder-new', created: true });
+      expect(files.create).toHaveBeenCalledWith({
+        requestBody: { name: 'draftsync', mimeType: 'application/vnd.google-apps.folder' },
+        fields: 'id'
+      });
+    });
+
+    it('should escape quotes in custom folder names', async () => {
+      files.list.mockResolvedValue({ data: { files: [] } });
+      files.create.mockResolvedValue({ data: { id: 'f' } });
+
+      await ensureFolder(AUTH, "Richard's Drafts");
+
+      expect(files.list.mock.calls[0][0].q).toContain("name='Richard\\'s Drafts'");
     });
   });
 

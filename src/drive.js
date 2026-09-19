@@ -10,7 +10,11 @@ import { google } from 'googleapis';
 import { promises as fs, createReadStream, createWriteStream } from 'fs';
 
 const GOOGLE_DOC_MIME = 'application/vnd.google-apps.document';
+const FOLDER_MIME = 'application/vnd.google-apps.folder';
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+
+/** Default Drive folder name for docs draftsync creates */
+export const DEFAULT_FOLDER_NAME = 'draftsync';
 
 /**
  * Read manifest file
@@ -158,6 +162,40 @@ export async function getDocMetadata(auth, docId) {
   });
 
   return response.data;
+}
+
+/**
+ * Find a Drive folder by name, creating it if it doesn't exist
+ *
+ * Note: with the drive.file scope the search only sees folders draftsync
+ * created, so a user's identically-named manual folder won't be found —
+ * draftsync manages its own folder.
+ *
+ * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
+ * @param {string} [name='draftsync'] - Folder name
+ * @returns {Promise<{id: string, created: boolean}>} Folder ID and whether
+ *   it was newly created
+ */
+export async function ensureFolder(auth, name = DEFAULT_FOLDER_NAME) {
+  const drive = google.drive({ version: 'v3', auth });
+
+  const escapedName = name.replace(/'/g, "\\'");
+  const response = await drive.files.list({
+    q: `mimeType='${FOLDER_MIME}' and name='${escapedName}' and trashed=false`,
+    fields: 'files(id, name)',
+    pageSize: 1
+  });
+
+  const existing = response.data.files?.[0];
+  if (existing) {
+    return { id: existing.id, created: false };
+  }
+
+  const created = await drive.files.create({
+    requestBody: { name, mimeType: FOLDER_MIME },
+    fields: 'id'
+  });
+  return { id: created.data.id, created: true };
 }
 
 /**

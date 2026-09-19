@@ -9,7 +9,7 @@ import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { authenticate, revokeToken, SCOPES } from './auth.js';
-import { createDoc, updateDoc, exportDocAsDocx } from './drive.js';
+import { createDoc, updateDoc, exportDocAsDocx, ensureFolder } from './drive.js';
 import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
@@ -139,8 +139,22 @@ async function pushCommand(filePath, options) {
       manifest.files[filePath].lastSync = new Date().toISOString();
       await saveManifest(manifest);
     } else {
+      // Resolve the Drive folder: --folder-id flag, then configured folder,
+      // then find-or-create the default "draftsync" folder
+      let folderId = options.folderId || manifest.config?.driveFolderId;
+      if (!folderId) {
+        const folder = await ensureFolder(auth);
+        folderId = folder.id;
+        console.log(
+          folder.created
+            ? chalk.green(`✓ Created Drive folder "draftsync" (${folderId})`)
+            : chalk.gray(`  Using Drive folder "draftsync" (${folderId})`)
+        );
+        manifest.config = { ...manifest.config, driveFolderId: folderId };
+      }
+
       // Create new doc
-      docId = await createDoc(auth, path.basename(filePath, '.md'), docxPath, options.folderId);
+      docId = await createDoc(auth, path.basename(filePath, '.md'), docxPath, folderId);
       console.log(chalk.green(`✓ Created new Google Doc: ${docId}`));
 
       // Update manifest
