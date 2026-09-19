@@ -48,8 +48,8 @@ those issues are labeled `google-api`.
 ### Language and modules
 
 - Plain JavaScript (no TypeScript), ES modules only (`"type": "module"`).
-- Node ≥ 18. Don't add syntax or APIs newer than the oldest supported Node
-  (CI runs 18/20/22).
+- Node ≥ 22 (18/20 are past end-of-life). Don't add syntax or APIs newer
+  than the oldest supported Node (CI runs 22/24).
 - File names are kebab-case (`file-filter.js`). Use named exports; no
   default exports.
 - Prefer `import { promises as fs } from 'fs'` over sync fs calls in
@@ -140,7 +140,7 @@ Verify the EPUB output opens in a reader.
   when it isn't obvious, and `Fixes #123` to close issues.
 - Keep commits focused and atomic.
 - Non-trivial changes go on a feature branch (`feature/my-feature` or
-  `fix/issue-123`) with a PR; CI (lint, tests, formatting, all three Node
+  `fix/issue-123`) with a PR; CI (lint, tests, formatting, both Node
   versions) must be green before merge. Trivial docs/chore commits may land
   directly on `main` at the maintainer's discretion.
 

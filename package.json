@@ -39,7 +39,7 @@
   "author": "Richard Garbutt <richard@1000mileweb.com>",
   "license": "MIT",
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

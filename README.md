@@ -20,7 +20,7 @@ A developer-friendly CLI tool for synchronizing Markdown manuscripts with Google
 
 ### Prerequisites
 
-1. **Node.js** (v18 or higher)
+1. **Node.js** (v22 or higher)
 
    ```bash
    node --version

@@ -7,7 +7,7 @@ follow. For contribution workflow and coding standards, see
 
 ## Overview
 
-draftsync is a Node.js CLI (ESM, Node ≥ 18) that treats a directory of
+draftsync is a Node.js CLI (ESM, Node ≥ 22) that treats a directory of
 Markdown files as the source of truth for a manuscript and moves content
 between three worlds:
 
