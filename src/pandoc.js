@@ -286,6 +286,54 @@ export async function convertMarkdownFilesToDocx(mdFiles, outputPath, options = 
 }
 
 /**
+ * Convert multiple Markdown files to a single PDF
+ *
+ * Requires a Pandoc PDF engine (a LaTeX install such as BasicTeX, or
+ * typst); fails with an actionable message otherwise.
+ *
+ * @param {string[]} mdFiles - Array of Markdown file paths, in order
+ * @param {string} outputPath - Path to save PDF file
+ * @param {Object} [options] - Conversion options
+ * @param {string} [options.metadata] - YAML metadata file
+ * @returns {Promise<string>} Path to generated PDF file
+ */
+export async function convertMarkdownFilesToPdf(mdFiles, outputPath, options = {}) {
+  console.log(chalk.gray(`  Converting ${mdFiles.length} files to PDF...`));
+
+  const { metadata = null } = options;
+
+  const isInstalled = await checkPandocInstalled();
+  if (!isInstalled) {
+    throw new Error('Pandoc is not installed. Install it from https://pandoc.org/installing.html');
+  }
+
+  await fs.mkdir(path.dirname(outputPath), { recursive: true });
+
+  const inputFiles = mdFiles.map(f => `"${f}"`).join(' ');
+  let command = `pandoc ${inputFiles} -o "${outputPath}"`;
+  if (metadata) {
+    command += ` --metadata-file="${metadata}"`;
+  }
+
+  try {
+    const { stderr } = await execAsync(command);
+    if (stderr && !stderr.includes('Warning')) {
+      console.log(chalk.yellow(`  Pandoc warnings: ${stderr}`));
+    }
+    console.log(chalk.gray(`  ✓ Created ${outputPath}`));
+    return outputPath;
+  } catch (error) {
+    if (error.message.includes('pdflatex') || error.message.includes('pdf-engine')) {
+      throw new Error(
+        'PDF export needs a Pandoc PDF engine. Install one, e.g. "brew install basictex" ' +
+          '(macOS) or "apt install texlive-latex-recommended" (Linux).'
+      );
+    }
+    throw new Error(`Pandoc PDF conversion failed: ${error.message}`);
+  }
+}
+
+/**
  * Convert Markdown files to EPUB
  *
  * @param {string[]} mdFiles - Array of Markdown file paths

@@ -165,23 +165,24 @@ export async function getDocMetadata(auth, docId) {
 }
 
 /**
- * Find a Drive folder by name, creating it if it doesn't exist
+ * Find a Drive folder by name within a parent, creating it if needed
  *
  * Note: with the drive.file scope the search only sees folders draftsync
  * created, so a user's identically-named manual folder won't be found —
- * draftsync manages its own folder.
+ * draftsync manages its own folders.
  *
  * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
  * @param {string} [name='draftsync'] - Folder name
+ * @param {string} [parentId='root'] - Parent folder ID
  * @returns {Promise<{id: string, created: boolean}>} Folder ID and whether
  *   it was newly created
  */
-export async function ensureFolder(auth, name = DEFAULT_FOLDER_NAME) {
+export async function ensureFolder(auth, name = DEFAULT_FOLDER_NAME, parentId = 'root') {
   const drive = google.drive({ version: 'v3', auth });
 
   const escapedName = name.replace(/'/g, "\\'");
   const response = await drive.files.list({
-    q: `mimeType='${FOLDER_MIME}' and name='${escapedName}' and trashed=false`,
+    q: `mimeType='${FOLDER_MIME}' and name='${escapedName}' and '${parentId}' in parents and trashed=false`,
     fields: 'files(id, name)',
     pageSize: 1
   });
@@ -192,10 +193,23 @@ export async function ensureFolder(auth, name = DEFAULT_FOLDER_NAME) {
   }
 
   const created = await drive.files.create({
-    requestBody: { name, mimeType: FOLDER_MIME },
+    requestBody: { name, mimeType: FOLDER_MIME, parents: [parentId] },
     fields: 'id'
   });
   return { id: created.data.id, created: true };
+}
+
+/**
+ * Resolve (and create if needed) the nested Drive folder for a project:
+ * draftsync/<project-name>/
+ *
+ * @param {google.auth.OAuth2} auth - Authenticated OAuth2 client
+ * @param {string} projectName - Project folder name
+ * @returns {Promise<{id: string, created: boolean}>} Project folder ID
+ */
+export async function ensureProjectFolder(auth, projectName) {
+  const root = await ensureFolder(auth);
+  return ensureFolder(auth, projectName, root.id);
 }
 
 /**

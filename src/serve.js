@@ -14,8 +14,80 @@ import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { openStore, getDataDir, STAGES } from './store.js';
-import { getAllMarkdownFiles, filterExcludedFiles } from './file-filter.js';
+import { getAllMarkdownFiles, filterExcludedFiles, getFilesToBuild } from './file-filter.js';
 import { AI_PURPOSES, providerFromUrl, ingestClaudeCode } from './ai-audit.js';
+import {
+  convertMarkdownFilesToDocx,
+  convertMarkdownFilesToPdf,
+  convertMarkdownToEpub
+} from './pandoc.js';
+
+const EXPORT_TYPES = {
+  epub: { mime: 'application/epub+zip', ext: 'epub' },
+  docx: {
+    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ext: 'docx'
+  },
+  pdf: { mime: 'application/pdf', ext: 'pdf' }
+};
+
+/**
+ * Read the project's draftsync manifest (empty shape when missing)
+ *
+ * @param {string} projectPath - Absolute project directory
+ * @returns {Promise<Object>} Manifest object
+ */
+async function readProjectManifest(projectPath) {
+  try {
+    return JSON.parse(await fs.readFile(path.join(projectPath, '.draftsync.json'), 'utf8'));
+  } catch {
+    return { files: {}, config: {} };
+  }
+}
+
+/**
+ * Build the manuscript in the requested format, returning the output path
+ *
+ * @param {string} projectPath - Absolute project directory
+ * @param {string} format - 'epub', 'docx', or 'pdf'
+ * @param {string} projectName - Used for the output file name
+ * @returns {Promise<string>} Absolute path of the built file
+ */
+async function buildExport(projectPath, format, projectName) {
+  const metadataPath = path.join(projectPath, 'templates', 'metadata.yaml');
+  const mdFiles = await getFilesToBuild({
+    contentDir: path.join(projectPath, 'content'),
+    metadataPath
+  });
+  if (mdFiles.length === 0) {
+    throw new Error('no Markdown files to build in content/');
+  }
+  let metadata = null;
+  try {
+    await fs.access(metadataPath);
+    metadata = metadataPath;
+  } catch {
+    // optional
+  }
+  const output = path.join(projectPath, 'dist', `${projectName}.${EXPORT_TYPES[format].ext}`);
+
+  if (format === 'docx') {
+    await convertMarkdownFilesToDocx(mdFiles, output, { metadata });
+  } else if (format === 'pdf') {
+    await convertMarkdownFilesToPdf(mdFiles, output, { metadata });
+  } else {
+    const css = path.join(projectPath, 'templates', 'epub.css');
+    let cssFile = null;
+    try {
+      await fs.access(css);
+      cssFile = css;
+    } catch {
+      // optional
+    }
+    await convertMarkdownToEpub(mdFiles, output, { metadata, css: cssFile, tocDepth: 3 });
+  }
+  return output;
+}
 
 const UI_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'kanban.html');
 
@@ -92,12 +164,42 @@ export function createKanbanServer({ store, projectPath }) {
         for (const e of aiEvents) {
           if (e.card_id) aiCounts[e.card_id] = (aiCounts[e.card_id] || 0) + 1;
         }
+        const manifest = await readProjectManifest(projectPath);
+        const cards = store.listCards(project.id).map(card => {
+          const gdocId = card.file && manifest.files?.[card.file]?.gdocId;
+          return gdocId
+            ? { ...card, gdocUrl: `https://docs.google.com/document/d/${gdocId}/edit` }
+            : card;
+        });
+        const driveFolderId = manifest.config?.driveFolderId;
         return send(200, {
-          project: { name: project.name, path: project.path },
+          project: {
+            name: project.name,
+            path: project.path,
+            driveFolderUrl: driveFolderId
+              ? `https://drive.google.com/drive/folders/${driveFolderId}`
+              : null
+          },
           stages: STAGES,
-          cards: store.listCards(project.id),
+          cards,
           ai: { total: aiEvents.length, byCard: aiCounts }
         });
+      }
+
+      const exportMatch = url.pathname.match(/^\/api\/export\/(epub|docx|pdf)$/);
+      if (req.method === 'GET' && exportMatch) {
+        const format = exportMatch[1];
+        try {
+          const filePath = await buildExport(projectPath, format, project.name);
+          const data = await fs.readFile(filePath);
+          res.writeHead(200, {
+            'Content-Type': EXPORT_TYPES[format].mime,
+            'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`
+          });
+          return res.end(data);
+        } catch (error) {
+          return send(500, { error: error.message });
+        }
       }
 
       if (req.method === 'GET' && url.pathname === '/api/ai-events') {

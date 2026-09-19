@@ -24,7 +24,8 @@ import {
   listDocs,
   getDocMetadata,
   trashDoc,
-  ensureFolder
+  ensureFolder,
+  ensureProjectFolder
 } from '../src/drive.js';
 
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
@@ -170,7 +171,7 @@ describe('Drive Unit Tests', () => {
 
       expect(result).toEqual({ id: 'folder-1', created: false });
       expect(files.list.mock.calls[0][0].q).toBe(
-        "mimeType='application/vnd.google-apps.folder' and name='draftsync' and trashed=false"
+        "mimeType='application/vnd.google-apps.folder' and name='draftsync' and 'root' in parents and trashed=false"
       );
       expect(files.create).not.toHaveBeenCalled();
     });
@@ -183,9 +184,38 @@ describe('Drive Unit Tests', () => {
 
       expect(result).toEqual({ id: 'folder-new', created: true });
       expect(files.create).toHaveBeenCalledWith({
-        requestBody: { name: 'draftsync', mimeType: 'application/vnd.google-apps.folder' },
+        requestBody: {
+          name: 'draftsync',
+          mimeType: 'application/vnd.google-apps.folder',
+          parents: ['root']
+        },
         fields: 'id'
       });
+    });
+
+    it('should scope lookup and creation to a parent folder', async () => {
+      files.list.mockResolvedValue({ data: { files: [] } });
+      files.create.mockResolvedValue({ data: { id: 'sub' } });
+
+      await ensureFolder(AUTH, 'my-novel', 'root-1');
+
+      expect(files.list.mock.calls[0][0].q).toContain("'root-1' in parents");
+      expect(files.create.mock.calls[0][0].requestBody.parents).toEqual(['root-1']);
+    });
+  });
+
+  describe('ensureProjectFolder', () => {
+    it('should nest the project folder inside the draftsync root', async () => {
+      files.list
+        .mockResolvedValueOnce({ data: { files: [{ id: 'root-1', name: 'draftsync' }] } })
+        .mockResolvedValueOnce({ data: { files: [] } });
+      files.create.mockResolvedValue({ data: { id: 'proj-1' } });
+
+      const result = await ensureProjectFolder(AUTH, 'my-novel');
+
+      expect(result).toEqual({ id: 'proj-1', created: true });
+      expect(files.list.mock.calls[1][0].q).toContain("name='my-novel' and 'root-1' in parents");
+      expect(files.create.mock.calls[0][0].requestBody.parents).toEqual(['root-1']);
     });
 
     it('should escape quotes in custom folder names', async () => {

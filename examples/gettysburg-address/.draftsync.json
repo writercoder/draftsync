@@ -1,9 +1,15 @@
 {
   "version": "1.0",
-  "files": {},
+  "files": {
+    "content/01-gettysburg-address.md": {
+      "gdocId": "1Q3p-TlujpQgPWDygbR_TuiOElwVe1GNGnMhSRfdLN9A",
+      "lastSync": "2026-09-19T14:22:32.465Z"
+    }
+  },
   "config": {
     "contentDir": "content",
     "distDir": "dist",
-    "templatesDir": "templates"
+    "templatesDir": "templates",
+    "driveFolderId": "1pNgBWBtYqEPcNONiMx-JQNhP9seMjA7w"
   }
 }

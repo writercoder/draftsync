@@ -9,7 +9,7 @@ import chalk from 'chalk';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { authenticate, revokeToken, SCOPES } from './auth.js';
-import { createDoc, updateDoc, exportDocAsDocx, ensureFolder } from './drive.js';
+import { createDoc, updateDoc, exportDocAsDocx, ensureProjectFolder } from './drive.js';
 import { formatDocument } from './docs.js';
 import { convertMarkdownToDocx, convertDocxToMarkdown } from './pandoc.js';
 import { buildEpub, checkEpub } from './build/epub.js';
@@ -144,15 +144,16 @@ async function pushCommand(filePath, options) {
       await saveManifest(manifest);
     } else {
       // Resolve the Drive folder: --folder-id flag, then configured folder,
-      // then find-or-create the default "draftsync" folder
+      // then find-or-create the nested draftsync/<project-name>/ folder
       let folderId = options.folderId || manifest.config?.driveFolderId;
       if (!folderId) {
-        const folder = await ensureFolder(auth);
+        const projectName = path.basename(process.cwd());
+        const folder = await ensureProjectFolder(auth, projectName);
         folderId = folder.id;
         console.log(
           folder.created
-            ? chalk.green(`✓ Created Drive folder "draftsync" (${folderId})`)
-            : chalk.gray(`  Using Drive folder "draftsync" (${folderId})`)
+            ? chalk.green(`✓ Created Drive folder draftsync/${projectName} (${folderId})`)
+            : chalk.gray(`  Using Drive folder draftsync/${projectName} (${folderId})`)
         );
         manifest.config = { ...manifest.config, driveFolderId: folderId };
       }

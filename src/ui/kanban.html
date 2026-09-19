@@ -203,6 +203,38 @@
         justify-content: space-between;
         margin-top: 1.1rem;
       }
+      header a,
+      .downloads a {
+        color: var(--accent);
+        font-size: 0.82rem;
+        text-decoration: none;
+      }
+      header a:hover {
+        text-decoration: underline;
+      }
+      .downloads {
+        display: flex;
+        gap: 0.5rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.3rem 0.7rem;
+      }
+      .downloads::before {
+        content: 'Download:';
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+      .card .gdoc {
+        display: inline-block;
+        font-size: 0.72rem;
+        color: var(--accent);
+        text-decoration: none;
+        margin-top: 0.25rem;
+        margin-right: 0.4rem;
+      }
+      .card .gdoc:hover {
+        text-decoration: underline;
+      }
       .ai-chip {
         display: inline-block;
         font-size: 0.68rem;
@@ -262,6 +294,12 @@
     <header>
       <h1 id="project-name">draftsync board</h1>
       <span class="path" id="project-path"></span>
+      <a id="drive-link" href="#" target="_blank" style="display: none">Drive folder ↗</a>
+      <span class="downloads">
+        <a href="/api/export/epub" download>EPUB</a>
+        <a href="/api/export/docx" download>DOCX</a>
+        <a href="/api/export/pdf" download>PDF</a>
+      </span>
       <button id="ai-open">AI log</button>
       <button id="import">Import chapters</button>
     </header>
@@ -328,6 +366,11 @@
         document.getElementById('project-path').textContent = board.project.path;
         document.title = board.project.name + ' · draftsync board';
         document.getElementById('ai-open').textContent = `AI log (${board.ai.total})`;
+        const drive = document.getElementById('drive-link');
+        if (board.project.driveFolderUrl) {
+          drive.href = board.project.driveFolderUrl;
+          drive.style.display = '';
+        }
         render();
       };
 
@@ -364,6 +407,15 @@
               f.className = 'file';
               f.textContent = card.file;
               el.appendChild(f);
+            }
+            if (card.gdocUrl) {
+              const g = document.createElement('a');
+              g.className = 'gdoc';
+              g.href = card.gdocUrl;
+              g.target = '_blank';
+              g.textContent = 'Google Doc ↗';
+              g.addEventListener('click', e => e.stopPropagation());
+              el.appendChild(g);
             }
             const aiCount = (state.ai && state.ai.byCard[card.id]) || 0;
             if (aiCount > 0) {

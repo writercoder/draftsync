@@ -219,6 +219,11 @@ build filters). Data is stored locally in `~/.draftsync/draftsync.db` —
 one database, projects keyed by directory, so every draftsync project
 gets its own board.
 
+The board also links out and exports: cards whose file has been pushed
+link to their Google Doc, the header links to the project's Drive
+folder, and Download buttons build the manuscript on demand as EPUB,
+DOCX, or PDF (PDF needs a Pandoc PDF engine such as BasicTeX).
+
 ### AI Auditability
 
 Policy: AI output should not end up in prose without specific

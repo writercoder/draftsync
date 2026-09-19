@@ -26,6 +26,14 @@ describe('Serve Integration Tests', () => {
     writeFileSync(join(projectDir, 'content', '01-opening.md'), '# The Opening\n\nText.\n');
     writeFileSync(join(projectDir, 'content', '02-middle.md'), 'No heading here.\n');
     writeFileSync(join(projectDir, 'content', 'drafts', 'scrap.md'), '# Scrap\n');
+    writeFileSync(
+      join(projectDir, '.draftsync.json'),
+      JSON.stringify({
+        version: '1.0',
+        files: { 'content/01-opening.md': { gdocId: 'gdoc-123' } },
+        config: { driveFolderId: 'folder-77' }
+      })
+    );
 
     store = openStore(join(tempDir, 'data'));
     server = createKanbanServer({ store, projectPath: projectDir });
@@ -103,6 +111,29 @@ describe('Serve Integration Tests', () => {
   it('should 404 unknown cards and routes', async () => {
     expect((await api('/api/cards/999', 'PATCH', { notes: 'x' })).status).toBe(404);
     expect((await api('/api/nope')).status).toBe(404);
+  });
+
+  it('should expose Google Doc links and the Drive folder from the manifest', async () => {
+    await api('/api/import', 'POST');
+    const board = await api('/api/board');
+
+    expect(board.body.project.driveFolderUrl).toBe(
+      'https://drive.google.com/drive/folders/folder-77'
+    );
+    const opening = board.body.cards.find(c => c.file === 'content/01-opening.md');
+    expect(opening.gdocUrl).toBe('https://docs.google.com/document/d/gdoc-123/edit');
+    const middle = board.body.cards.find(c => c.file === 'content/02-middle.md');
+    expect(middle.gdocUrl).toBeUndefined();
+  });
+
+  it('should build and download a DOCX export', async () => {
+    const res = await fetch(base + '/api/export/docx');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('wordprocessingml');
+    expect(res.headers.get('content-disposition')).toContain('my-novel.docx');
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    // DOCX files are ZIP archives: PK magic bytes
+    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
   });
 
   it('should manage AI events over the API with provider auto-detection', async () => {
