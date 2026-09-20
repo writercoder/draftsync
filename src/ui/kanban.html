@@ -235,6 +235,44 @@
       .card .gdoc:hover {
         text-decoration: underline;
       }
+      .task-chip {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--muted);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0 0.45rem;
+        margin-top: 0.25rem;
+        margin-right: 0.3rem;
+      }
+      #task-list .task {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.2rem 0;
+        font-size: 0.88rem;
+      }
+      #task-list .task.done span {
+        text-decoration: line-through;
+        color: var(--muted);
+      }
+      #task-list .task span {
+        flex: 1;
+      }
+      #task-list .task button {
+        font-size: 0.7rem;
+        padding: 0.05rem 0.4rem;
+      }
+      #task-new {
+        width: 100%;
+        font: inherit;
+        padding: 0.45rem 0.6rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--ground);
+        color: var(--ink);
+      }
       .ai-chip {
         display: inline-block;
         font-size: 0.68rem;
@@ -292,14 +330,16 @@
   </head>
   <body>
     <header>
+      <a href="/" style="font-size: 0.82rem">← Projects</a>
       <h1 id="project-name">draftsync board</h1>
       <span class="path" id="project-path"></span>
       <a id="drive-link" href="#" target="_blank" style="display: none">Drive folder ↗</a>
       <span class="downloads">
-        <a href="/api/export/epub" download>EPUB</a>
-        <a href="/api/export/docx" download>DOCX</a>
-        <a href="/api/export/pdf" download>PDF</a>
+        <a id="dl-epub" download>EPUB</a>
+        <a id="dl-docx" download>DOCX</a>
+        <a id="dl-pdf" download>PDF</a>
       </span>
+      <button id="meta-open">Metadata</button>
       <button id="ai-open">AI log</button>
       <button id="import">Import chapters</button>
     </header>
@@ -327,6 +367,24 @@
       <div class="ai-list" id="ai-list"></div>
     </dialog>
 
+    <dialog id="meta-dialog">
+      <form id="meta-form">
+        <strong>metadata.yaml</strong>
+        <label for="meta-content">EPUB/DOCX metadata for this project (YAML)</label>
+        <textarea
+          id="meta-content"
+          style="min-height: 18rem; font-family: ui-monospace, monospace; font-size: 0.82rem"
+        ></textarea>
+        <div class="dialog-actions">
+          <span></span>
+          <span>
+            <button type="button" id="meta-cancel">Cancel</button>
+            <button type="submit" class="primary">Save</button>
+          </span>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="editor">
       <form method="dialog" id="editor-form">
         <label for="edit-title">Title</label>
@@ -335,6 +393,13 @@
         <textarea id="edit-notes" placeholder="Status, feedback to address, next steps…"></textarea>
         <label for="edit-file">Linked file</label>
         <input type="text" id="edit-file" placeholder="content/01-chapter.md" />
+        <label>Tasks</label>
+        <div id="task-list"></div>
+        <input
+          type="text"
+          id="task-new"
+          placeholder="Add a task (from editor notes, reviews…) — Enter to save"
+        />
         <div class="dialog-actions">
           <button type="button" class="danger" id="edit-delete">Delete</button>
           <span>
@@ -346,6 +411,8 @@
     </dialog>
 
     <script>
+      const projectId = Number(location.pathname.split('/')[2]);
+      const base = `/api/p/${projectId}`;
       let state = { stages: [], cards: [] };
       let editing = null;
 
@@ -360,7 +427,7 @@
       };
 
       const load = async () => {
-        const board = await api('/api/board');
+        const board = await api(`${base}/board`);
         state = board;
         document.getElementById('project-name').textContent = board.project.name;
         document.getElementById('project-path').textContent = board.project.path;
@@ -370,6 +437,9 @@
         if (board.project.driveFolderUrl) {
           drive.href = board.project.driveFolderUrl;
           drive.style.display = '';
+        }
+        for (const fmt of ['epub', 'docx', 'pdf']) {
+          document.getElementById(`dl-${fmt}`).href = `${base}/export/${fmt}`;
         }
         render();
       };
@@ -417,6 +487,13 @@
               g.addEventListener('click', e => e.stopPropagation());
               el.appendChild(g);
             }
+            const openTasks = (state.tasks && state.tasks.openByCard[card.id]) || 0;
+            if (openTasks > 0) {
+              const t = document.createElement('span');
+              t.className = 'task-chip';
+              t.textContent = `☐ ${openTasks}`;
+              el.appendChild(t);
+            }
             const aiCount = (state.ai && state.ai.byCard[card.id]) || 0;
             if (aiCount > 0) {
               const chip = document.createElement('span');
@@ -459,7 +536,7 @@
           const r = c.getBoundingClientRect();
           return e.clientY > r.top + r.height / 2;
         }).length;
-        await api(`/api/cards/${dragged.dataset.id}`, 'PATCH', {
+        await api(`${base}/cards/${dragged.dataset.id}`, 'PATCH', {
           stage: list.dataset.stage,
           index
         });
@@ -475,7 +552,7 @@
           const title = input.value.trim();
           input.remove();
           if (commit && title) {
-            await api('/api/cards', 'POST', { title, stage });
+            await api(`${base}/cards`, 'POST', { title, stage });
             load();
           }
         };
@@ -488,16 +565,74 @@
         input.focus();
       };
 
+      const renderTasks = async () => {
+        const { tasks } = await api(`${base}/tasks`);
+        const mine = tasks.filter(t => t.card_id === editing.id);
+        const list = document.getElementById('task-list');
+        list.innerHTML = '';
+        for (const t of mine) {
+          const row = document.createElement('div');
+          row.className = 'task' + (t.done ? ' done' : '');
+          const check = document.createElement('input');
+          check.type = 'checkbox';
+          check.checked = !!t.done;
+          check.addEventListener('change', async () => {
+            await api(`${base}/tasks/${t.id}`, 'PATCH', { done: check.checked });
+            renderTasks();
+            load();
+          });
+          const text = document.createElement('span');
+          text.textContent = t.text;
+          const del = document.createElement('button');
+          del.textContent = '×';
+          del.addEventListener('click', async () => {
+            await api(`${base}/tasks/${t.id}`, 'DELETE');
+            renderTasks();
+            load();
+          });
+          row.append(check, text, del);
+          list.appendChild(row);
+        }
+      };
+
       const openEditor = card => {
         editing = card;
         document.getElementById('edit-title').value = card.title;
         document.getElementById('edit-notes').value = card.notes || '';
         document.getElementById('edit-file').value = card.file || '';
+        renderTasks();
         document.getElementById('editor').showModal();
       };
 
+      document.getElementById('task-new').addEventListener('keydown', async e => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const text = e.target.value.trim();
+        if (!text) return;
+        await api(`${base}/tasks`, 'POST', { text, card_id: editing.id });
+        e.target.value = '';
+        renderTasks();
+        load();
+      });
+
+      document.getElementById('meta-open').addEventListener('click', async () => {
+        const meta = await api(`${base}/metadata`);
+        document.getElementById('meta-content').value = meta.content;
+        document.getElementById('meta-dialog').showModal();
+      });
+      document
+        .getElementById('meta-cancel')
+        .addEventListener('click', () => document.getElementById('meta-dialog').close());
+      document.getElementById('meta-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        await api(`${base}/metadata`, 'PUT', {
+          content: document.getElementById('meta-content').value
+        });
+        document.getElementById('meta-dialog').close();
+      });
+
       document.getElementById('editor-form').addEventListener('submit', async () => {
-        await api(`/api/cards/${editing.id}`, 'PATCH', {
+        await api(`${base}/cards/${editing.id}`, 'PATCH', {
           title: document.getElementById('edit-title').value,
           notes: document.getElementById('edit-notes').value,
           file: document.getElementById('edit-file').value || null
@@ -509,13 +644,13 @@
         .addEventListener('click', () => document.getElementById('editor').close());
       document.getElementById('edit-delete').addEventListener('click', async () => {
         if (!confirm('Delete this card?')) return;
-        await api(`/api/cards/${editing.id}`, 'DELETE');
+        await api(`${base}/cards/${editing.id}`, 'DELETE');
         document.getElementById('editor').close();
         load();
       });
       document.getElementById('import').addEventListener('click', async () => {
         try {
-          const result = await api('/api/import', 'POST');
+          const result = await api(`${base}/import`, 'POST');
           if (result.imported === 0) alert('Nothing new to import from content/.');
           load();
         } catch (e) {
@@ -524,7 +659,7 @@
       });
 
       const renderAiDialog = async () => {
-        const { events, purposes } = await api('/api/ai-events');
+        const { events, purposes } = await api(`${base}/ai-events`);
         const purposeSel = document.getElementById('ai-purpose');
         purposeSel.innerHTML = purposes.map(p => `<option value="${p}">${p}</option>`).join('');
         const cardSel = document.getElementById('ai-card');
@@ -543,7 +678,7 @@
           const del = document.createElement('button');
           del.textContent = 'Remove';
           del.addEventListener('click', async () => {
-            await api(`/api/ai-events/${e.id}`, 'DELETE');
+            await api(`${base}/ai-events/${e.id}`, 'DELETE');
             renderAiDialog();
             load();
           });
@@ -589,7 +724,7 @@
       document.getElementById('ai-form').addEventListener('submit', async e => {
         e.preventDefault();
         try {
-          await api('/api/ai-events', 'POST', {
+          await api(`${base}/ai-events`, 'POST', {
             url: document.getElementById('ai-url').value || undefined,
             purpose: document.getElementById('ai-purpose').value,
             card_id: document.getElementById('ai-card').value || undefined,
@@ -604,7 +739,7 @@
         }
       });
       document.getElementById('ai-ingest').addEventListener('click', async () => {
-        const result = await api('/api/ai-ingest', 'POST');
+        const result = await api(`${base}/ai-ingest`, 'POST');
         alert(
           result.found === 0
             ? 'No Claude Code transcripts found for this project.'

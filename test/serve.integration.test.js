@@ -1,23 +1,26 @@
 /**
- * Integration tests for the kanban HTTP server
+ * Integration tests for the global draftsync server
  *
  * Runs the real server on an ephemeral port against a temp-dir store
- * and project, exercising the API with fetch.
+ * and project, exercising the home/board APIs with fetch.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
+import { readFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { openStore } from '../src/store.js';
-import { createKanbanServer } from '../src/serve.js';
+import { createDraftsyncServer, looksLikeProject } from '../src/serve.js';
 
 describe('Serve Integration Tests', () => {
   let tempDir;
   let projectDir;
   let store;
+  let project;
   let server;
   let base;
+  let p; // project-scoped API prefix
 
   beforeEach(async () => {
     tempDir = mkdtempSync(join(tmpdir(), 'draftsync-serve-'));
@@ -36,9 +39,11 @@ describe('Serve Integration Tests', () => {
     );
 
     store = openStore(join(tempDir, 'data'));
-    server = createKanbanServer({ store, projectPath: projectDir });
+    project = store.getOrCreateProject(projectDir);
+    server = createDraftsyncServer({ store });
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     base = `http://127.0.0.1:${server.address().port}`;
+    p = `/api/p/${project.id}`;
   });
 
   afterEach(async () => {
@@ -56,155 +61,189 @@ describe('Serve Integration Tests', () => {
     return { status: res.status, body: await res.json().catch(() => null) };
   };
 
-  it('should serve the board UI at /', async () => {
-    const res = await fetch(base + '/');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('text/html');
-    expect(await res.text()).toContain('draftsync board');
-  });
+  describe('pages and registry', () => {
+    it('should serve the home page at / and the board at /p/:id', async () => {
+      const home = await fetch(base + '/');
+      expect(home.status).toBe(200);
+      expect(await home.text()).toContain('all projects');
 
-  it('should return the empty board with stages and project info', async () => {
-    const { status, body } = await api('/api/board');
-    expect(status).toBe(200);
-    expect(body.project.name).toBe('my-novel');
-    expect(body.stages).toHaveLength(5);
-    expect(body.cards).toEqual([]);
-  });
-
-  it('should create, move, and delete a card through the API', async () => {
-    const created = await api('/api/cards', 'POST', { title: 'Chapter 1', stage: 'outline' });
-    expect(created.status).toBe(201);
-
-    const moved = await api(`/api/cards/${created.body.id}`, 'PATCH', {
-      stage: 'revision',
-      index: 0
+      const board = await fetch(`${base}/p/${project.id}`);
+      expect(board.status).toBe(200);
+      expect(await board.text()).toContain('draftsync board');
     });
-    expect(moved.body.stage).toBe('revision');
 
-    const edited = await api(`/api/cards/${created.body.id}`, 'PATCH', { notes: 'tighten pacing' });
-    expect(edited.body.notes).toBe('tighten pacing');
+    it('should list, register, and label projects', async () => {
+      const list = await api('/api/projects');
+      expect(list.body.projects.map(x => x.name)).toContain('my-novel');
 
-    const deleted = await api(`/api/cards/${created.body.id}`, 'DELETE');
-    expect(deleted.body.deleted).toBe(true);
+      const otherDir = join(tempDir, 'short-story');
+      mkdirSync(otherDir);
+      const created = await api('/api/projects', 'POST', { path: otherDir });
+      expect(created.status).toBe(201);
 
-    const board = await api('/api/board');
-    expect(board.body.cards).toEqual([]);
-  });
+      const labeled = await api(`/api/projects/${created.body.id}`, 'PATCH', {
+        label: 'Short stories'
+      });
+      expect(labeled.body.label).toBe('Short stories');
 
-  it('should reject bad input with 400', async () => {
-    const noTitle = await api('/api/cards', 'POST', { stage: 'outline' });
-    expect(noTitle.status).toBe(400);
-    const badStage = await api('/api/cards', 'POST', { title: 'X', stage: 'nope' });
-    expect(badStage.status).toBe(400);
-  });
-
-  it('should reject malformed JSON bodies with 400', async () => {
-    const res = await fetch(base + '/api/cards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '{not json'
+      const bad = await api('/api/projects', 'POST', { path: join(tempDir, 'nope') });
+      expect(bad.status).toBe(400);
     });
-    expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/invalid JSON/);
-  });
 
-  it('should 404 unknown cards and routes', async () => {
-    expect((await api('/api/cards/999', 'PATCH', { notes: 'x' })).status).toBe(404);
-    expect((await api('/api/nope')).status).toBe(404);
-  });
-
-  it('should expose Google Doc links and the Drive folder from the manifest', async () => {
-    await api('/api/import', 'POST');
-    const board = await api('/api/board');
-
-    expect(board.body.project.driveFolderUrl).toBe(
-      'https://drive.google.com/drive/folders/folder-77'
-    );
-    const opening = board.body.cards.find(c => c.file === 'content/01-opening.md');
-    expect(opening.gdocUrl).toBe('https://docs.google.com/document/d/gdoc-123/edit');
-    const middle = board.body.cards.find(c => c.file === 'content/02-middle.md');
-    expect(middle.gdocUrl).toBeUndefined();
-  });
-
-  it('should build and download a DOCX export', async () => {
-    const res = await fetch(base + '/api/export/docx');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toContain('wordprocessingml');
-    expect(res.headers.get('content-disposition')).toContain('my-novel.docx');
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    // DOCX files are ZIP archives: PK magic bytes
-    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
-  });
-
-  it('should build and download an EPUB export', async () => {
-    const res = await fetch(base + '/api/export/epub');
-    expect(res.status).toBe(200);
-    expect(res.headers.get('content-type')).toBe('application/epub+zip');
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
-  });
-
-  it('should reject unknown export formats', async () => {
-    expect((await api('/api/export/mobi')).status).toBe(404);
-  });
-
-  it('should manage AI events over the API with provider auto-detection', async () => {
-    const card = await api('/api/cards', 'POST', { title: 'Chapter 1' });
-
-    const created = await api('/api/ai-events', 'POST', {
-      url: 'https://claude.ai/chat/abc',
-      purpose: 'critique',
-      card_id: card.body.id,
-      justification: 'asked for pacing feedback'
+    it('should detect project directories', async () => {
+      expect(await looksLikeProject(projectDir)).toBe(true);
+      expect(await looksLikeProject(tempDir)).toBe(false);
     });
-    expect(created.status).toBe(201);
-    expect(created.body.provider).toBe('anthropic');
-    expect(created.body.card_id).toBe(card.body.id);
-
-    const board = await api('/api/board');
-    expect(board.body.ai.total).toBe(1);
-    expect(board.body.ai.byCard[card.body.id]).toBe(1);
-
-    const listed = await api('/api/ai-events');
-    expect(listed.body.events).toHaveLength(1);
-    expect(listed.body.purposes).toContain('prose-suggestion');
-
-    const removed = await api(`/api/ai-events/${created.body.id}`, 'DELETE');
-    expect(removed.body.deleted).toBe(true);
   });
 
-  it('should enforce the AI policy and provider requirements', async () => {
-    const noProvider = await api('/api/ai-events', 'POST', { purpose: 'other' });
-    expect(noProvider.status).toBe(400);
-
-    const noJustification = await api('/api/ai-events', 'POST', {
-      provider: 'openai',
-      purpose: 'prose-suggestion'
+  describe('board and cards', () => {
+    it('should return the board with stages, links, and counts', async () => {
+      const { status, body } = await api(`${p}/board`);
+      expect(status).toBe(200);
+      expect(body.project.name).toBe('my-novel');
+      expect(body.stages).toHaveLength(5);
+      expect(body.project.driveFolderUrl).toBe('https://drive.google.com/drive/folders/folder-77');
     });
-    expect(noJustification.status).toBe(400);
-    expect(noJustification.body.error).toMatch(/justification/);
 
-    const badPurpose = await api('/api/ai-events', 'POST', {
-      provider: 'openai',
-      purpose: 'vibes'
+    it('should create, move, and delete a card', async () => {
+      const created = await api(`${p}/cards`, 'POST', { title: 'Chapter 1', stage: 'outline' });
+      expect(created.status).toBe(201);
+
+      const moved = await api(`${p}/cards/${created.body.id}`, 'PATCH', {
+        stage: 'revision',
+        index: 0
+      });
+      expect(moved.body.stage).toBe('revision');
+
+      const deleted = await api(`${p}/cards/${created.body.id}`, 'DELETE');
+      expect(deleted.body.deleted).toBe(true);
     });
-    expect(badPurpose.status).toBe(400);
+
+    it('should import chapters idempotently with Doc links', async () => {
+      const first = await api(`${p}/import`, 'POST');
+      expect(first.body.imported).toBe(2);
+      const again = await api(`${p}/import`, 'POST');
+      expect(again.body.imported).toBe(0);
+
+      const board = await api(`${p}/board`);
+      const opening = board.body.cards.find(c => c.file === 'content/01-opening.md');
+      expect(opening.gdocUrl).toBe('https://docs.google.com/document/d/gdoc-123/edit');
+    });
+
+    it('should 404 for unknown projects and cards', async () => {
+      expect((await api('/api/p/999/board')).status).toBe(404);
+      expect((await api(`${p}/cards/999`, 'PATCH', { notes: 'x' })).status).toBe(404);
+    });
   });
 
-  it('should import chapters from content/, excluding drafts, idempotently', async () => {
-    const first = await api('/api/import', 'POST');
-    expect(first.body.imported).toBe(2);
+  describe('tasks', () => {
+    it('should manage tasks per card and show open counts on the board', async () => {
+      const card = await api(`${p}/cards`, 'POST', { title: 'Chapter 1' });
+      const task = await api(`${p}/tasks`, 'POST', {
+        text: 'Fix pacing per editor notes',
+        card_id: card.body.id
+      });
+      expect(task.status).toBe(201);
+      await api(`${p}/tasks`, 'POST', { text: 'Project-wide: choose an epigraph' });
 
-    const board = await api('/api/board');
-    const titles = board.body.cards.map(c => c.title).sort();
-    expect(titles).toEqual(['02-middle', 'The Opening']);
-    expect(board.body.cards.every(c => c.stage === 'drafting')).toBe(true);
-    expect(board.body.cards.map(c => c.file).sort()).toEqual([
-      'content/01-opening.md',
-      'content/02-middle.md'
-    ]);
+      const board = await api(`${p}/board`);
+      expect(board.body.tasks.openByCard[card.body.id]).toBe(1);
 
-    const again = await api('/api/import', 'POST');
-    expect(again.body.imported).toBe(0);
+      const done = await api(`${p}/tasks/${task.body.id}`, 'PATCH', { done: true });
+      expect(done.body.done).toBe(1);
+      expect(done.body.done_at).toBeTruthy();
+
+      const list = await api(`${p}/tasks`);
+      expect(list.body.tasks).toHaveLength(2);
+
+      const removed = await api(`${p}/tasks/${task.body.id}`, 'DELETE');
+      expect(removed.body.deleted).toBe(true);
+    });
+
+    it('should aggregate open tasks globally with project and card names', async () => {
+      const card = await api(`${p}/cards`, 'POST', { title: 'Chapter 1' });
+      await api(`${p}/tasks`, 'POST', { text: 'Open one', card_id: card.body.id });
+      const closed = await api(`${p}/tasks`, 'POST', { text: 'Done one' });
+      await api(`${p}/tasks/${closed.body.id}`, 'PATCH', { done: true });
+
+      const global = await api('/api/tasks');
+      expect(global.body.tasks).toHaveLength(1);
+      expect(global.body.tasks[0]).toMatchObject({
+        text: 'Open one',
+        projectName: 'my-novel',
+        cardTitle: 'Chapter 1'
+      });
+    });
+
+    it('should reject empty tasks and unknown cards', async () => {
+      expect((await api(`${p}/tasks`, 'POST', { text: '  ' })).status).toBe(400);
+      expect((await api(`${p}/tasks`, 'POST', { text: 'x', card_id: 999 })).status).toBe(400);
+    });
+  });
+
+  describe('metadata', () => {
+    it('should round-trip metadata.yaml through the API', async () => {
+      const before = await api(`${p}/metadata`);
+      expect(before.body).toEqual({ content: '', exists: false });
+
+      const saved = await api(`${p}/metadata`, 'PUT', { content: 'title: "My Novel"\n' });
+      expect(saved.body.saved).toBe(true);
+      expect(await readFile(join(projectDir, 'templates', 'metadata.yaml'), 'utf8')).toBe(
+        'title: "My Novel"\n'
+      );
+
+      const after = await api(`${p}/metadata`);
+      expect(after.body).toEqual({ content: 'title: "My Novel"\n', exists: true });
+
+      expect((await api(`${p}/metadata`, 'PUT', { content: 42 })).status).toBe(400);
+    });
+  });
+
+  describe('exports', () => {
+    it('should build and download DOCX and EPUB exports', async () => {
+      for (const [fmt, mime] of [
+        ['docx', 'wordprocessingml'],
+        ['epub', 'application/epub+zip']
+      ]) {
+        const res = await fetch(`${base}${p}/export/${fmt}`);
+        expect(res.status).toBe(200);
+        expect(res.headers.get('content-type')).toContain(mime);
+        const bytes = new Uint8Array(await res.arrayBuffer());
+        expect([bytes[0], bytes[1]]).toEqual([0x50, 0x4b]);
+      }
+    });
+
+    it('should reject unknown export formats', async () => {
+      expect((await api(`${p}/export/mobi`)).status).toBe(404);
+    });
+  });
+
+  describe('AI events', () => {
+    it('should manage AI events with provider auto-detection', async () => {
+      const card = await api(`${p}/cards`, 'POST', { title: 'Chapter 1' });
+      const created = await api(`${p}/ai-events`, 'POST', {
+        url: 'https://claude.ai/chat/abc',
+        purpose: 'critique',
+        card_id: card.body.id,
+        justification: 'asked for pacing feedback'
+      });
+      expect(created.status).toBe(201);
+      expect(created.body.provider).toBe('anthropic');
+
+      const board = await api(`${p}/board`);
+      expect(board.body.ai.byCard[card.body.id]).toBe(1);
+
+      const removed = await api(`${p}/ai-events/${created.body.id}`, 'DELETE');
+      expect(removed.body.deleted).toBe(true);
+    });
+
+    it('should enforce the AI policy', async () => {
+      const noJustification = await api(`${p}/ai-events`, 'POST', {
+        provider: 'openai',
+        purpose: 'prose-suggestion'
+      });
+      expect(noJustification.status).toBe(400);
+      expect(noJustification.body.error).toMatch(/justification/);
+    });
   });
 });

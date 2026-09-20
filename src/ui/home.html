@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>draftsync</title>
+    <style>
+      :root {
+        --ground: #fbfaf7;
+        --card: #ffffff;
+        --column: #f0eee7;
+        --ink: #232830;
+        --muted: #6b7480;
+        --accent: #2f5a8f;
+        --line: #e0ddd4;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #14171c;
+          --card: #232a33;
+          --column: #1b2027;
+          --ink: #e9e6df;
+          --muted: #99a1ab;
+          --accent: #7fa8d9;
+          --line: #2a3038;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font:
+          15px/1.5 -apple-system,
+          'Segoe UI',
+          system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        font-size: 1.1rem;
+        margin: 0;
+      }
+      header span {
+        color: var(--muted);
+        font-size: 0.8rem;
+      }
+      main {
+        max-width: 44rem;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+      h2 {
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 1.6rem 0 0.6rem;
+      }
+      .project {
+        display: flex;
+        align-items: baseline;
+        gap: 0.8rem;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.7rem 1rem;
+        margin-bottom: 0.6rem;
+      }
+      .project a.name {
+        color: var(--ink);
+        font-weight: 600;
+        text-decoration: none;
+        font-size: 1rem;
+      }
+      .project a.name:hover {
+        color: var(--accent);
+      }
+      .project .path {
+        color: var(--muted);
+        font-size: 0.75rem;
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .project .count {
+        color: var(--muted);
+        font-size: 0.8rem;
+        white-space: nowrap;
+      }
+      .label-btn {
+        font-size: 0.72rem;
+        color: var(--accent);
+        background: none;
+        border: 1px dashed var(--line);
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        cursor: pointer;
+      }
+      .label-btn:hover {
+        border-color: var(--accent);
+      }
+      form.add {
+        display: flex;
+        gap: 0.6rem;
+        margin-top: 2rem;
+      }
+      form.add input {
+        flex: 1;
+        font: inherit;
+        padding: 0.5rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        background: var(--card);
+        color: var(--ink);
+      }
+      form.add button {
+        font: inherit;
+        background: var(--accent);
+        color: #fff;
+        border: none;
+        border-radius: 6px;
+        padding: 0.5rem 1rem;
+        cursor: pointer;
+      }
+      .empty {
+        color: var(--muted);
+        padding: 2.5rem 0;
+        text-align: center;
+      }
+      .task {
+        display: flex;
+        align-items: baseline;
+        gap: 0.6rem;
+        background: var(--column);
+        border-radius: 6px;
+        padding: 0.45rem 0.8rem;
+        margin-bottom: 0.4rem;
+        font-size: 0.9rem;
+      }
+      .task .where {
+        color: var(--muted);
+        font-size: 0.78rem;
+        white-space: nowrap;
+      }
+      .task .where a {
+        color: var(--accent);
+        text-decoration: none;
+      }
+      .task span.text {
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>draftsync</h1>
+      <span>all projects</span>
+    </header>
+    <main>
+      <div id="tasks-overview"></div>
+      <div id="groups"></div>
+      <form class="add" id="add-form">
+        <input id="add-path" placeholder="Register a project by absolute path…" required />
+        <button type="submit">Add project</button>
+      </form>
+    </main>
+
+    <script>
+      const api = async (path, method = 'GET', body) => {
+        const res = await fetch(path, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+        return res.json();
+      };
+
+      const loadTasks = async () => {
+        const { tasks } = await api('/api/tasks');
+        const root = document.getElementById('tasks-overview');
+        root.innerHTML = '';
+        if (tasks.length === 0) return;
+        const h = document.createElement('h2');
+        h.textContent = `Open tasks (${tasks.length})`;
+        root.appendChild(h);
+        for (const t of tasks) {
+          const row = document.createElement('div');
+          row.className = 'task';
+          const check = document.createElement('input');
+          check.type = 'checkbox';
+          check.addEventListener('change', async () => {
+            await api(`/api/p/${t.projectId}/tasks/${t.id}`, 'PATCH', { done: true });
+            loadTasks();
+          });
+          const text = document.createElement('span');
+          text.className = 'text';
+          text.textContent = t.text;
+          const where = document.createElement('span');
+          where.className = 'where';
+          where.innerHTML = `<a href="/p/${t.projectId}">${t.projectName}</a>${
+            t.cardTitle ? ' · ' + t.cardTitle : ''
+          }`;
+          row.append(check, text, where);
+          root.appendChild(row);
+        }
+      };
+
+      const load = async () => {
+        const { projects } = await api('/api/projects');
+        const groups = new Map();
+        for (const p of projects) {
+          const key = p.label || 'Unlabeled';
+          if (!groups.has(key)) groups.set(key, []);
+          groups.get(key).push(p);
+        }
+        const root = document.getElementById('groups');
+        root.innerHTML = '';
+        if (projects.length === 0) {
+          root.innerHTML =
+            '<div class="empty">No projects yet — run a draftsync command in a project directory, or register one below.</div>';
+          return;
+        }
+        for (const [label, group] of groups) {
+          const h = document.createElement('h2');
+          h.textContent = label;
+          root.appendChild(h);
+          for (const p of group) {
+            const row = document.createElement('div');
+            row.className = 'project';
+
+            const name = document.createElement('a');
+            name.className = 'name';
+            name.href = `/p/${p.id}`;
+            name.textContent = p.name;
+            row.appendChild(name);
+
+            const labelBtn = document.createElement('button');
+            labelBtn.className = 'label-btn';
+            labelBtn.textContent = p.label || '+ label';
+            labelBtn.title = 'Set label (empty to clear)';
+            labelBtn.addEventListener('click', async () => {
+              const value = prompt('Label for this project (empty to clear):', p.label || '');
+              if (value === null) return;
+              await api(`/api/projects/${p.id}`, 'PATCH', { label: value.trim() || null });
+              load();
+            });
+            row.appendChild(labelBtn);
+
+            const pathEl = document.createElement('span');
+            pathEl.className = 'path';
+            pathEl.textContent = p.path;
+            row.appendChild(pathEl);
+
+            const count = document.createElement('span');
+            count.className = 'count';
+            count.textContent = `${p.cardCount} card${p.cardCount === 1 ? '' : 's'}`;
+            row.appendChild(count);
+
+            root.appendChild(row);
+          }
+        }
+      };
+
+      document.getElementById('add-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        try {
+          await api('/api/projects', 'POST', {
+            path: document.getElementById('add-path').value
+          });
+          document.getElementById('add-path').value = '';
+          load();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      load();
+      loadTasks();
+    </script>
+  </body>
+</html>

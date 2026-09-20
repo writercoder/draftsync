@@ -1,9 +1,13 @@
 /**
- * Local Kanban Server
+ * Local Draftsync Server
  *
- * Serves a web-based kanban board for tracking the current project's
- * writing pipeline. Data lives in the SQLite store (~/.draftsync);
- * the server binds to localhost only.
+ * Global (not per-workspace): serves a home view of every registered
+ * project — grouped by label — and a kanban board per project, from the
+ * single SQLite store in ~/.draftsync. Binds to localhost only.
+ *
+ * Routes: `/` home, `/p/:id` board, `/api/projects` registry, and
+ * project-scoped APIs under `/api/p/:id/...` (board, cards, import,
+ * ai-events, ai-ingest, export, metadata).
  */
 
 import http from 'http';
@@ -22,6 +26,8 @@ import {
   convertMarkdownToEpub
 } from './pandoc.js';
 
+const UI_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui');
+
 const EXPORT_TYPES = {
   epub: { mime: 'application/epub+zip', ext: 'epub' },
   docx: {
@@ -30,66 +36,6 @@ const EXPORT_TYPES = {
   },
   pdf: { mime: 'application/pdf', ext: 'pdf' }
 };
-
-/**
- * Read the project's draftsync manifest (empty shape when missing)
- *
- * @param {string} projectPath - Absolute project directory
- * @returns {Promise<Object>} Manifest object
- */
-async function readProjectManifest(projectPath) {
-  try {
-    return JSON.parse(await fs.readFile(path.join(projectPath, '.draftsync.json'), 'utf8'));
-  } catch {
-    return { files: {}, config: {} };
-  }
-}
-
-/**
- * Build the manuscript in the requested format, returning the output path
- *
- * @param {string} projectPath - Absolute project directory
- * @param {string} format - 'epub', 'docx', or 'pdf'
- * @param {string} projectName - Used for the output file name
- * @returns {Promise<string>} Absolute path of the built file
- */
-async function buildExport(projectPath, format, projectName) {
-  const metadataPath = path.join(projectPath, 'templates', 'metadata.yaml');
-  const mdFiles = await getFilesToBuild({
-    contentDir: path.join(projectPath, 'content'),
-    metadataPath
-  });
-  if (mdFiles.length === 0) {
-    throw new Error('no Markdown files to build in content/');
-  }
-  let metadata = null;
-  try {
-    await fs.access(metadataPath);
-    metadata = metadataPath;
-  } catch {
-    // optional
-  }
-  const output = path.join(projectPath, 'dist', `${projectName}.${EXPORT_TYPES[format].ext}`);
-
-  if (format === 'docx') {
-    await convertMarkdownFilesToDocx(mdFiles, output, { metadata });
-  } else if (format === 'pdf') {
-    await convertMarkdownFilesToPdf(mdFiles, output, { metadata });
-  } else {
-    const css = path.join(projectPath, 'templates', 'epub.css');
-    let cssFile = null;
-    try {
-      await fs.access(css);
-      cssFile = css;
-    } catch {
-      // optional
-    }
-    await convertMarkdownToEpub(mdFiles, output, { metadata, css: cssFile, tocDepth: 3 });
-  }
-  return output;
-}
-
-const UI_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui', 'kanban.html');
 
 /**
  * Read and JSON-parse a request body (up to 1MB)
@@ -133,64 +79,218 @@ async function titleFromFile(filePath) {
 }
 
 /**
- * Create the kanban HTTP server for a project directory
+ * Read a project's draftsync manifest (empty shape when missing)
+ *
+ * @param {string} projectPath - Absolute project directory
+ * @returns {Promise<Object>} Manifest object
+ */
+async function readProjectManifest(projectPath) {
+  try {
+    return JSON.parse(await fs.readFile(path.join(projectPath, '.draftsync.json'), 'utf8'));
+  } catch {
+    return { files: {}, config: {} };
+  }
+}
+
+/**
+ * Build the manuscript in the requested format, returning the output path
+ *
+ * @param {Object} project - Project row (path, name)
+ * @param {string} format - 'epub', 'docx', or 'pdf'
+ * @returns {Promise<string>} Absolute path of the built file
+ */
+async function buildExport(project, format) {
+  const metadataPath = path.join(project.path, 'templates', 'metadata.yaml');
+  const mdFiles = await getFilesToBuild({
+    contentDir: path.join(project.path, 'content'),
+    metadataPath
+  });
+  if (mdFiles.length === 0) {
+    throw new Error('no Markdown files to build in content/');
+  }
+  let metadata = null;
+  try {
+    await fs.access(metadataPath);
+    metadata = metadataPath;
+  } catch {
+    // optional
+  }
+  const output = path.join(project.path, 'dist', `${project.name}.${EXPORT_TYPES[format].ext}`);
+
+  if (format === 'docx') {
+    await convertMarkdownFilesToDocx(mdFiles, output, { metadata });
+  } else if (format === 'pdf') {
+    await convertMarkdownFilesToPdf(mdFiles, output, { metadata });
+  } else {
+    const css = path.join(project.path, 'templates', 'epub.css');
+    let cssFile = null;
+    try {
+      await fs.access(css);
+      cssFile = css;
+    } catch {
+      // optional
+    }
+    await convertMarkdownToEpub(mdFiles, output, { metadata, css: cssFile, tocDepth: 3 });
+  }
+  return output;
+}
+
+/**
+ * Does a directory look like a draftsync project?
+ *
+ * @param {string} dir - Directory to check
+ * @returns {Promise<boolean>} True when a manifest or content/ exists
+ */
+export async function looksLikeProject(dir) {
+  for (const marker of ['.draftsync.json', 'content']) {
+    try {
+      await fs.access(path.join(dir, marker));
+      return true;
+    } catch {
+      // keep looking
+    }
+  }
+  return false;
+}
+
+/**
+ * Create the global draftsync HTTP server
  *
  * @param {Object} options
  * @param {import('./store.js').Store} options.store - Open store
- * @param {string} options.projectPath - Absolute project directory
  * @returns {http.Server} Configured server (not yet listening)
  */
-export function createKanbanServer({ store, projectPath }) {
-  const project = store.getOrCreateProject(projectPath);
-
+export function createDraftsyncServer({ store }) {
   return http.createServer(async (req, res) => {
     const send = (status, body, type = 'application/json') => {
       res.writeHead(status, { 'Content-Type': type });
       res.end(type === 'application/json' ? JSON.stringify(body) : body);
     };
+    const sendPage = async file => {
+      const html = await fs.readFile(path.join(UI_DIR, file), 'utf8');
+      return send(200, html, 'text/html; charset=utf-8');
+    };
 
     try {
       const url = new URL(req.url, 'http://localhost');
-      const cardMatch = url.pathname.match(/^\/api\/cards\/(\d+)$/);
 
-      if (req.method === 'GET' && url.pathname === '/') {
-        const html = await fs.readFile(UI_PATH, 'utf8');
-        return send(200, html, 'text/html; charset=utf-8');
+      // Pages
+      if (req.method === 'GET' && url.pathname === '/') return sendPage('home.html');
+      if (req.method === 'GET' && /^\/p\/\d+$/.test(url.pathname)) return sendPage('kanban.html');
+
+      // Global open-tasks overview
+      if (req.method === 'GET' && url.pathname === '/api/tasks') {
+        return send(200, { tasks: store.listAllOpenTasks() });
       }
 
-      if (req.method === 'GET' && url.pathname === '/api/board') {
+      // Project registry
+      if (req.method === 'GET' && url.pathname === '/api/projects') {
+        return send(200, { projects: store.listProjects() });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/projects') {
+        const body = await readBody(req);
+        const projectPath = path.resolve(body.path || '');
+        let stat;
+        try {
+          stat = await fs.stat(projectPath);
+        } catch {
+          return send(400, { error: `not a directory: ${projectPath}` });
+        }
+        if (!stat.isDirectory()) {
+          return send(400, { error: `not a directory: ${projectPath}` });
+        }
+        return send(201, store.getOrCreateProject(projectPath));
+      }
+      const projectEdit = url.pathname.match(/^\/api\/projects\/(\d+)$/);
+      if (req.method === 'PATCH' && projectEdit) {
+        const project = store.getProject(Number(projectEdit[1]));
+        if (!project) return send(404, { error: 'project not found' });
+        const body = await readBody(req);
+        return send(200, store.updateProject(project.id, body));
+      }
+
+      // Project-scoped API
+      const scoped = url.pathname.match(/^\/api\/p\/(\d+)(\/.*)$/);
+      if (!scoped) return send(404, { error: 'not found' });
+      const project = store.getProject(Number(scoped[1]));
+      if (!project) return send(404, { error: 'project not found' });
+      const route = scoped[2];
+      const cardMatch = route.match(/^\/cards\/(\d+)$/);
+      const taskMatch = route.match(/^\/tasks\/(\d+)$/);
+      const aiMatch = route.match(/^\/ai-events\/(\d+)$/);
+      const exportMatch = route.match(/^\/export\/(epub|docx|pdf)$/);
+
+      if (req.method === 'GET' && route === '/board') {
         const aiEvents = store.listAiEvents(project.id);
         const aiCounts = {};
         for (const e of aiEvents) {
           if (e.card_id) aiCounts[e.card_id] = (aiCounts[e.card_id] || 0) + 1;
         }
-        const manifest = await readProjectManifest(projectPath);
+        const manifest = await readProjectManifest(project.path);
         const cards = store.listCards(project.id).map(card => {
           const gdocId = card.file && manifest.files?.[card.file]?.gdocId;
           return gdocId
             ? { ...card, gdocUrl: `https://docs.google.com/document/d/${gdocId}/edit` }
             : card;
         });
+        const taskCounts = {};
+        for (const t of store.listTasks(project.id)) {
+          if (!t.done && t.card_id) taskCounts[t.card_id] = (taskCounts[t.card_id] || 0) + 1;
+        }
         const driveFolderId = manifest.config?.driveFolderId;
         return send(200, {
           project: {
+            id: project.id,
             name: project.name,
             path: project.path,
+            label: project.label,
             driveFolderUrl: driveFolderId
               ? `https://drive.google.com/drive/folders/${driveFolderId}`
               : null
           },
           stages: STAGES,
           cards,
+          tasks: { openByCard: taskCounts },
           ai: { total: aiEvents.length, byCard: aiCounts }
         });
       }
 
-      const exportMatch = url.pathname.match(/^\/api\/export\/(epub|docx|pdf)$/);
+      if (req.method === 'GET' && route === '/tasks') {
+        return send(200, { tasks: store.listTasks(project.id) });
+      }
+      if (req.method === 'POST' && route === '/tasks') {
+        const body = await readBody(req);
+        if (body.card_id) {
+          const card = store.getCard(Number(body.card_id));
+          if (!card || card.project_id !== project.id) {
+            return send(400, { error: 'unknown card' });
+          }
+        }
+        return send(
+          201,
+          store.createTask(project.id, {
+            text: body.text,
+            cardId: body.card_id ? Number(body.card_id) : null
+          })
+        );
+      }
+      if ((req.method === 'PATCH' || req.method === 'DELETE') && taskMatch) {
+        const task = store.getTask(Number(taskMatch[1]));
+        if (!task || task.project_id !== project.id) {
+          return send(404, { error: 'task not found' });
+        }
+        if (req.method === 'DELETE') {
+          store.deleteTask(task.id);
+          return send(200, { deleted: true });
+        }
+        const body = await readBody(req);
+        return send(200, store.updateTask(task.id, body));
+      }
+
       if (req.method === 'GET' && exportMatch) {
         const format = exportMatch[1];
         try {
-          const filePath = await buildExport(projectPath, format, project.name);
+          const filePath = await buildExport(project, format);
           const data = await fs.readFile(filePath);
           res.writeHead(200, {
             'Content-Type': EXPORT_TYPES[format].mime,
@@ -202,11 +302,83 @@ export function createKanbanServer({ store, projectPath }) {
         }
       }
 
-      if (req.method === 'GET' && url.pathname === '/api/ai-events') {
+      if (req.method === 'GET' && route === '/metadata') {
+        const metadataPath = path.join(project.path, 'templates', 'metadata.yaml');
+        try {
+          return send(200, { content: await fs.readFile(metadataPath, 'utf8'), exists: true });
+        } catch {
+          return send(200, { content: '', exists: false });
+        }
+      }
+      if (req.method === 'PUT' && route === '/metadata') {
+        const body = await readBody(req);
+        if (typeof body.content !== 'string') {
+          return send(400, { error: 'content (string) is required' });
+        }
+        const templatesDir = path.join(project.path, 'templates');
+        await fs.mkdir(templatesDir, { recursive: true });
+        await fs.writeFile(path.join(templatesDir, 'metadata.yaml'), body.content, 'utf8');
+        return send(200, { saved: true });
+      }
+
+      if (req.method === 'POST' && route === '/cards') {
+        const body = await readBody(req);
+        return send(201, store.createCard(project.id, body));
+      }
+
+      if (req.method === 'PATCH' && cardMatch) {
+        const id = Number(cardMatch[1]);
+        const existing = store.getCard(id);
+        if (!existing || existing.project_id !== project.id) {
+          return send(404, { error: 'card not found' });
+        }
+        const body = await readBody(req);
+        let card = store.updateCard(id, body);
+        if (body.stage !== undefined || body.index !== undefined) {
+          card = store.moveCard(id, body.stage ?? card.stage, body.index);
+        }
+        return send(200, card);
+      }
+
+      if (req.method === 'DELETE' && cardMatch) {
+        const id = Number(cardMatch[1]);
+        const existing = store.getCard(id);
+        if (!existing || existing.project_id !== project.id) {
+          return send(404, { error: 'card not found' });
+        }
+        store.deleteCard(id);
+        return send(200, { deleted: true });
+      }
+
+      if (req.method === 'POST' && route === '/import') {
+        const contentDir = path.join(project.path, 'content');
+        let files;
+        try {
+          files = filterExcludedFiles(await getAllMarkdownFiles(contentDir));
+        } catch {
+          return send(400, { error: 'no content/ directory in this project' });
+        }
+        const linked = store.linkedFiles(project.id);
+        const imported = [];
+        for (const file of files) {
+          const relative = path.relative(project.path, file);
+          if (linked.has(relative)) continue;
+          imported.push(
+            store.createCard(project.id, {
+              title: await titleFromFile(file),
+              stage: 'drafting',
+              file: relative
+            })
+          );
+        }
+        return send(200, { imported: imported.length, cards: imported });
+      }
+
+      if (req.method === 'GET' && route === '/ai-events') {
         return send(200, { events: store.listAiEvents(project.id), purposes: AI_PURPOSES });
       }
 
-      if (req.method === 'POST' && url.pathname === '/api/ai-events') {
+      if (req.method === 'POST' && route === '/ai-events') {
         const body = await readBody(req);
         const provider = body.provider || (body.url && providerFromUrl(body.url));
         if (!provider) {
@@ -240,7 +412,6 @@ export function createKanbanServer({ store, projectPath }) {
         return send(201, event);
       }
 
-      const aiMatch = url.pathname.match(/^\/api\/ai-events\/(\d+)$/);
       if (req.method === 'DELETE' && aiMatch) {
         const event = store.getAiEvent(Number(aiMatch[1]));
         if (!event || event.project_id !== project.id) {
@@ -250,63 +421,9 @@ export function createKanbanServer({ store, projectPath }) {
         return send(200, { deleted: true });
       }
 
-      if (req.method === 'POST' && url.pathname === '/api/ai-ingest') {
-        const result = await ingestClaudeCode(store, project.id, projectPath);
+      if (req.method === 'POST' && route === '/ai-ingest') {
+        const result = await ingestClaudeCode(store, project.id, project.path);
         return send(200, result);
-      }
-
-      if (req.method === 'POST' && url.pathname === '/api/cards') {
-        const body = await readBody(req);
-        const card = store.createCard(project.id, body);
-        return send(201, card);
-      }
-
-      if (req.method === 'PATCH' && cardMatch) {
-        const id = Number(cardMatch[1]);
-        const existing = store.getCard(id);
-        if (!existing || existing.project_id !== project.id) {
-          return send(404, { error: 'card not found' });
-        }
-        const body = await readBody(req);
-        let card = store.updateCard(id, body);
-        if (body.stage !== undefined || body.index !== undefined) {
-          card = store.moveCard(id, body.stage ?? card.stage, body.index);
-        }
-        return send(200, card);
-      }
-
-      if (req.method === 'DELETE' && cardMatch) {
-        const id = Number(cardMatch[1]);
-        const existing = store.getCard(id);
-        if (!existing || existing.project_id !== project.id) {
-          return send(404, { error: 'card not found' });
-        }
-        store.deleteCard(id);
-        return send(200, { deleted: true });
-      }
-
-      if (req.method === 'POST' && url.pathname === '/api/import') {
-        const contentDir = path.join(projectPath, 'content');
-        let files;
-        try {
-          files = filterExcludedFiles(await getAllMarkdownFiles(contentDir));
-        } catch {
-          return send(400, { error: 'no content/ directory in this project' });
-        }
-        const linked = store.linkedFiles(project.id);
-        const imported = [];
-        for (const file of files) {
-          const relative = path.relative(projectPath, file);
-          if (linked.has(relative)) continue;
-          imported.push(
-            store.createCard(project.id, {
-              title: await titleFromFile(file),
-              stage: 'drafting',
-              file: relative
-            })
-          );
-        }
-        return send(200, { imported: imported.length, cards: imported });
       }
 
       return send(404, { error: 'not found' });
@@ -317,7 +434,11 @@ export function createKanbanServer({ store, projectPath }) {
 }
 
 /**
- * `draftsync serve` command: start the board for the current project
+ * `draftsync serve` command: start the global board server
+ *
+ * Works from anywhere. When run inside a directory that looks like a
+ * draftsync project, that project is registered and its board opens;
+ * otherwise the projects home opens.
  *
  * @param {Object} options - CLI options
  * @param {string} [options.port='8787'] - Port to listen on
@@ -326,12 +447,19 @@ export function createKanbanServer({ store, projectPath }) {
 export async function serveCommand(options = {}) {
   const port = Number(options.port || 8787);
   const store = openStore();
-  const server = createKanbanServer({ store, projectPath: process.cwd() });
+  const server = createDraftsyncServer({ store });
+
+  let startPath = '/';
+  if (await looksLikeProject(process.cwd())) {
+    const project = store.getOrCreateProject(process.cwd());
+    startPath = `/p/${project.id}`;
+  }
 
   server.listen(port, '127.0.0.1', () => {
-    const url = `http://localhost:${port}`;
-    console.log(chalk.blue.bold('\ndraftsync board\n'));
-    console.log(chalk.green(`✓ Serving ${path.basename(process.cwd())} at ${url}`));
+    const url = `http://localhost:${port}${startPath}`;
+    console.log(chalk.blue.bold('\ndraftsync\n'));
+    console.log(chalk.green(`✓ Serving all projects at http://localhost:${port}`));
+    console.log(chalk.gray(`  Opening ${url}`));
     console.log(chalk.gray(`  Data: ${path.join(getDataDir(), 'draftsync.db')}`));
     console.log(chalk.gray('  Press Ctrl+C to stop\n'));
     const opener =

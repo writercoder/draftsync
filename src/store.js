@@ -79,7 +79,25 @@ export function openStore(dataDir = getDataDir()) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(project_id, session_key)
     );
+    CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      card_id INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+      text TEXT NOT NULL,
+      done INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      done_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id, done);
   `);
+  // Migrations for columns added after the initial schema
+  const projectCols = db
+    .prepare('PRAGMA table_info(projects)')
+    .all()
+    .map(c => c.name);
+  if (!projectCols.includes('label')) {
+    db.exec('ALTER TABLE projects ADD COLUMN label TEXT');
+  }
   return new Store(db);
 }
 
@@ -106,6 +124,51 @@ export class Store {
       .prepare('INSERT INTO projects (path, name) VALUES (?, ?)')
       .run(projectPath, name);
     return this.db.prepare('SELECT * FROM projects WHERE id = ?').get(lastInsertRowid);
+  }
+
+  /**
+   * Get one project by ID
+   *
+   * @param {number} id - Project ID
+   * @returns {Object|undefined} Project row
+   */
+  getProject(id) {
+    return this.db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
+  }
+
+  /**
+   * List all projects with card counts, labeled first then by name
+   *
+   * @returns {Array<Object>} Project rows with cardCount
+   */
+  listProjects() {
+    return this.db
+      .prepare(
+        `SELECT p.*, COUNT(c.id) AS cardCount
+         FROM projects p LEFT JOIN cards c ON c.project_id = p.id
+         GROUP BY p.id
+         ORDER BY p.label IS NULL, p.label, p.name`
+      )
+      .all();
+  }
+
+  /**
+   * Update a project's editable fields (name, label)
+   *
+   * @param {number} id - Project ID
+   * @param {Object} fields - Any of name, label (null clears the label)
+   * @returns {Object|undefined} Updated project
+   */
+  updateProject(id, fields) {
+    const allowed = ['name', 'label'];
+    const updates = allowed.filter(k => fields[k] !== undefined);
+    if (updates.length > 0) {
+      const set = updates.map(k => `${k} = ?`).join(', ');
+      this.db
+        .prepare(`UPDATE projects SET ${set} WHERE id = ?`)
+        .run(...updates.map(k => fields[k]), id);
+    }
+    return this.getProject(id);
   }
 
   /**
@@ -351,6 +414,92 @@ export class Store {
    */
   deleteAiEvent(id) {
     return this.db.prepare('DELETE FROM ai_events WHERE id = ?').run(id).changes > 0;
+  }
+
+  /**
+   * List a project's tasks (open first, newest first within each group)
+   *
+   * @param {number} projectId - Project ID
+   * @returns {Array<Object>} Task rows
+   */
+  listTasks(projectId) {
+    return this.db
+      .prepare('SELECT * FROM tasks WHERE project_id = ? ORDER BY done, id DESC')
+      .all(projectId);
+  }
+
+  /**
+   * List open tasks across all projects, with project and card names
+   *
+   * @returns {Array<Object>} Task rows joined with projectName/cardTitle
+   */
+  listAllOpenTasks() {
+    return this.db
+      .prepare(
+        `SELECT t.*, p.name AS projectName, p.id AS projectId, c.title AS cardTitle
+         FROM tasks t
+         JOIN projects p ON p.id = t.project_id
+         LEFT JOIN cards c ON c.id = t.card_id
+         WHERE t.done = 0
+         ORDER BY t.id DESC`
+      )
+      .all();
+  }
+
+  /**
+   * Create a task, optionally attached to a card
+   *
+   * @param {number} projectId - Project ID
+   * @param {Object} fields - {text, cardId}
+   * @returns {Object} The created task
+   */
+  createTask(projectId, { text, cardId = null }) {
+    if (!text || !text.trim()) throw new Error('text is required');
+    const { lastInsertRowid } = this.db
+      .prepare('INSERT INTO tasks (project_id, card_id, text) VALUES (?, ?, ?)')
+      .run(projectId, cardId, text.trim());
+    return this.getTask(lastInsertRowid);
+  }
+
+  /**
+   * Get one task by ID
+   *
+   * @param {number} id - Task ID
+   * @returns {Object|undefined} Task row
+   */
+  getTask(id) {
+    return this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id);
+  }
+
+  /**
+   * Update a task (text and/or done state)
+   *
+   * @param {number} id - Task ID
+   * @param {Object} fields - Any of text, done (boolean)
+   * @returns {Object|undefined} Updated task
+   */
+  updateTask(id, fields) {
+    if (fields.text !== undefined) {
+      this.db.prepare('UPDATE tasks SET text = ? WHERE id = ?').run(fields.text, id);
+    }
+    if (fields.done !== undefined) {
+      this.db
+        .prepare(
+          "UPDATE tasks SET done = ?, done_at = CASE WHEN ? THEN datetime('now') ELSE NULL END WHERE id = ?"
+        )
+        .run(fields.done ? 1 : 0, fields.done ? 1 : 0, id);
+    }
+    return this.getTask(id);
+  }
+
+  /**
+   * Delete a task
+   *
+   * @param {number} id - Task ID
+   * @returns {boolean} True if a task was deleted
+   */
+  deleteTask(id) {
+    return this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id).changes > 0;
   }
 
   /** Close the database */

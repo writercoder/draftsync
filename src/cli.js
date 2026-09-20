@@ -472,7 +472,7 @@ export function run() {
 
   program
     .command('serve')
-    .description('Serve the local kanban board for this project')
+    .description('Serve the draftsync web app (all projects) locally')
     .option('-p, --port <port>', 'Port to listen on', '8787')
     .action(serveCommand);
 

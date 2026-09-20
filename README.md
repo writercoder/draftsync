@@ -205,24 +205,33 @@ draftsync build:web [options]
 draftsync preview:kdp [file.epub]
 ```
 
-### Project Board
+### Project Boards (web app)
 
 ```bash
-# Serve a local web kanban board for this project
+# Serve the draftsync web app — a global command, run it from anywhere
 draftsync serve [--port 8787]
 ```
 
-Opens a browser board with stages Outline → Drafting → Revision → Beta →
-Done. Cards can be added by hand or seeded from `content/*.md` via the
-"Import chapters" button (drafts and notes are excluded, matching the
-build filters). Data is stored locally in `~/.draftsync/draftsync.db` —
-one database, projects keyed by directory, so every draftsync project
-gets its own board.
+One local server for all your projects, backed by the single SQLite
+database at `~/.draftsync/draftsync.db`. The home view lists every
+registered project grouped by **label** (e.g. "Short stories") with a
+global **open-tasks overview**; each project has its own kanban board
+(Outline → Drafting → Revision → Beta → Done). Run `serve` inside a
+project directory and that project is registered and opened directly;
+new projects can also be registered from the home page by path.
 
-The board also links out and exports: cards whose file has been pushed
-link to their Google Doc, the header links to the project's Drive
-folder, and Download buttons build the manuscript on demand as EPUB,
-DOCX, or PDF (PDF needs a Pandoc PDF engine such as BasicTeX).
+On a project board:
+
+- Cards can be added by hand or seeded from `content/*.md` via "Import
+  chapters" (drafts/notes excluded, matching the build filters)
+- Each card holds a **task checklist** (editor notes, review feedback);
+  open counts show on cards and roll up to the home overview
+- Cards whose file has been pushed link to their Google Doc; the header
+  links to the project's Drive folder
+- Download buttons build the manuscript on demand as EPUB, DOCX, or PDF
+  (PDF needs a Pandoc PDF engine such as BasicTeX)
+- The **Metadata** button edits the project's `templates/metadata.yaml`
+  in place — the file stays the source of truth for builds
 
 ### AI Auditability
 
