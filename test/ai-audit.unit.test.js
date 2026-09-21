@@ -148,14 +148,17 @@ describe('AI Audit Unit Tests', () => {
     it('should group by chapter and flag unjustified prose events', async () => {
       const store = openStore(join(tempDir, 'data2'));
       const project = store.getOrCreateProject('/Users/me/my-novel');
-      const card = store.createCard(project.id, { title: 'Chapter 3', file: 'content/03.md' });
+      const chapter = store.createChapter(project.id, {
+        title: 'Chapter 3',
+        file: 'content/03.md'
+      });
 
       store.upsertAiEvent(project.id, {
         sessionKey: 'https://claude.ai/chat/x',
         provider: 'anthropic',
         source: 'chat-link',
         url: 'https://claude.ai/chat/x',
-        cardId: card.id,
+        chapterId: chapter.id,
         purpose: 'prose-suggestion',
         justification: ''
       });

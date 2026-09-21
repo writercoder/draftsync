@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import Database from 'better-sqlite3';
 import { openStore, STAGES } from '../src/store.js';
 
 describe('Store Unit Tests', () => {
@@ -44,76 +45,76 @@ describe('Store Unit Tests', () => {
     });
   });
 
-  describe('cards', () => {
-    it('should create cards at the end of a stage', () => {
-      const a = store.createCard(project.id, { title: 'Chapter 1' });
-      const b = store.createCard(project.id, { title: 'Chapter 2' });
+  describe('chapters', () => {
+    it('should create chapters at the end of a stage', () => {
+      const a = store.createChapter(project.id, { title: 'Chapter 1' });
+      const b = store.createChapter(project.id, { title: 'Chapter 2' });
       expect(a.stage).toBe('drafting');
       expect([a.position, b.position]).toEqual([0, 1]);
     });
 
     it('should reject empty titles and unknown stages', () => {
-      expect(() => store.createCard(project.id, { title: '  ' })).toThrow(/title/);
-      expect(() => store.createCard(project.id, { title: 'X', stage: 'nope' })).toThrow(
+      expect(() => store.createChapter(project.id, { title: '  ' })).toThrow(/title/);
+      expect(() => store.createChapter(project.id, { title: 'X', stage: 'nope' })).toThrow(
         /unknown stage/
       );
     });
 
     it('should update editable fields only', () => {
-      const card = store.createCard(project.id, { title: 'Ch 1' });
-      const updated = store.updateCard(card.id, {
+      const chapter = store.createChapter(project.id, { title: 'Ch 1' });
+      const updated = store.updateChapter(chapter.id, {
         title: 'Chapter One',
         notes: 'needs a better opening',
-        stage: 'done' // not an updateCard field; must be ignored
+        stage: 'done' // not an updateChapter field; must be ignored
       });
       expect(updated.title).toBe('Chapter One');
       expect(updated.notes).toBe('needs a better opening');
       expect(updated.stage).toBe('drafting');
     });
 
-    it('should delete cards', () => {
-      const card = store.createCard(project.id, { title: 'Ch 1' });
-      expect(store.deleteCard(card.id)).toBe(true);
-      expect(store.getCard(card.id)).toBeUndefined();
-      expect(store.deleteCard(card.id)).toBe(false);
+    it('should delete chapters', () => {
+      const chapter = store.createChapter(project.id, { title: 'Ch 1' });
+      expect(store.deleteChapter(chapter.id)).toBe(true);
+      expect(store.getChapter(chapter.id)).toBeUndefined();
+      expect(store.deleteChapter(chapter.id)).toBe(false);
     });
 
     it('should track linked files', () => {
-      store.createCard(project.id, { title: 'Ch 1', file: 'content/01.md' });
-      store.createCard(project.id, { title: 'Idea' });
+      store.createChapter(project.id, { title: 'Ch 1', file: 'content/01.md' });
+      store.createChapter(project.id, { title: 'Idea' });
       expect(store.linkedFiles(project.id)).toEqual(new Set(['content/01.md']));
     });
   });
 
-  describe('moveCard', () => {
-    it('should move a card between stages and reindex positions', () => {
-      const a = store.createCard(project.id, { title: 'A' });
-      store.createCard(project.id, { title: 'B' });
-      store.createCard(project.id, { title: 'C', stage: 'revision' });
+  describe('moveChapter', () => {
+    it('should move a chapter between stages and reindex positions', () => {
+      const a = store.createChapter(project.id, { title: 'A' });
+      store.createChapter(project.id, { title: 'B' });
+      store.createChapter(project.id, { title: 'C', stage: 'revision' });
 
-      store.moveCard(a.id, 'revision', 0);
+      store.moveChapter(a.id, 'revision', 0);
 
-      const cards = store.listCards(project.id);
-      const revision = cards.filter(x => x.stage === 'revision').map(x => x.title);
-      const drafting = cards.filter(x => x.stage === 'drafting');
+      const chapters = store.listChapters(project.id);
+      const revision = chapters.filter(x => x.stage === 'revision').map(x => x.title);
+      const drafting = chapters.filter(x => x.stage === 'drafting');
       expect(revision).toEqual(['A', 'C']);
       expect(drafting.map(x => x.title)).toEqual(['B']);
       expect(drafting[0].position).toBe(0);
     });
 
     it('should clamp the target index', () => {
-      const a = store.createCard(project.id, { title: 'A' });
-      const moved = store.moveCard(a.id, 'done', 99);
+      const a = store.createChapter(project.id, { title: 'A' });
+      const moved = store.moveChapter(a.id, 'done', 99);
       expect(moved.stage).toBe('done');
       expect(moved.position).toBe(0);
     });
 
     it('should reorder within a stage', () => {
-      const a = store.createCard(project.id, { title: 'A' });
-      store.createCard(project.id, { title: 'B' });
-      store.moveCard(a.id, 'drafting', 1);
+      const a = store.createChapter(project.id, { title: 'A' });
+      store.createChapter(project.id, { title: 'B' });
+      store.moveChapter(a.id, 'drafting', 1);
       const titles = store
-        .listCards(project.id)
+        .listChapters(project.id)
         .filter(x => x.stage === 'drafting')
         .map(x => x.title);
       expect(titles).toEqual(['B', 'A']);
@@ -122,9 +123,9 @@ describe('Store Unit Tests', () => {
 
   describe('editions', () => {
     it('should create editions with unique names and ordered membership', () => {
-      const a = store.createCard(project.id, { title: 'A', file: 'content/a.md' });
-      const b = store.createCard(project.id, { title: 'B', file: 'content/b.md' });
-      const c = store.createCard(project.id, { title: 'C' });
+      const a = store.createChapter(project.id, { title: 'A', file: 'content/a.md' });
+      const b = store.createChapter(project.id, { title: 'B', file: 'content/b.md' });
+      const c = store.createChapter(project.id, { title: 'C' });
 
       const edition = store.createEdition(project.id, { name: "Reader's" });
       expect(() => store.createEdition(project.id, { name: "Reader's" })).toThrow(/exists/);
@@ -141,19 +142,19 @@ describe('Store Unit Tests', () => {
       expect(listed[0].chapterCount).toBe(2);
     });
 
-    it('should reject cards from other projects', () => {
+    it('should reject chapters from other projects', () => {
       const other = store.getOrCreateProject('/home/me/other');
-      const foreign = store.createCard(other.id, { title: 'X' });
+      const foreign = store.createChapter(other.id, { title: 'X' });
       const edition = store.createEdition(project.id, { name: 'E' });
       expect(() => store.setEditionChapters(edition.id, [foreign.id])).toThrow(/not in this/);
     });
 
-    it('should cascade membership on edition delete and card delete', () => {
-      const a = store.createCard(project.id, { title: 'A' });
+    it('should cascade membership on edition delete and chapter delete', () => {
+      const a = store.createChapter(project.id, { title: 'A' });
       const edition = store.createEdition(project.id, { name: 'E' });
       store.setEditionChapters(edition.id, [a.id]);
 
-      store.deleteCard(a.id);
+      store.deleteChapter(a.id);
       expect(store.listEditionChapters(edition.id)).toEqual([]);
 
       expect(store.deleteEdition(edition.id)).toBe(true);
@@ -198,6 +199,42 @@ describe('Store Unit Tests', () => {
 
       expect(store.deleteCollection(col.id)).toBe(true);
       expect(store.getCollectionEdition(ed.id)).toBeUndefined();
+    });
+  });
+
+  describe('legacy migration', () => {
+    it('should rename cards to chapters in a pre-rename database', () => {
+      store.close();
+      rmSync(join(tempDir, 'draftsync.db'), { force: true });
+      rmSync(join(tempDir, 'draftsync.db-wal'), { force: true });
+
+      // Build a legacy-schema database by hand
+      const legacy = new Database(join(tempDir, 'draftsync.db'));
+      legacy.exec(`
+        CREATE TABLE projects (id INTEGER PRIMARY KEY, path TEXT NOT NULL UNIQUE,
+          name TEXT NOT NULL, created_at TEXT NOT NULL DEFAULT (datetime('now')), label TEXT);
+        CREATE TABLE cards (id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL,
+          title TEXT NOT NULL, stage TEXT NOT NULL DEFAULT 'drafting', notes TEXT NOT NULL DEFAULT '',
+          file TEXT, position INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')));
+        CREATE INDEX idx_cards_project ON cards(project_id, stage, position);
+        CREATE TABLE tasks (id INTEGER PRIMARY KEY, project_id INTEGER NOT NULL,
+          card_id INTEGER, text TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')), done_at TEXT);
+        INSERT INTO projects (path, name) VALUES ('/old/proj', 'proj');
+        INSERT INTO cards (project_id, title, stage) VALUES (1, 'Legacy Chapter', 'beta');
+        INSERT INTO tasks (project_id, card_id, text) VALUES (1, 1, 'legacy task');
+      `);
+      legacy.close();
+
+      store = openStore(tempDir);
+      const chapters = store.listChapters(1);
+      expect(chapters.map(c => c.title)).toEqual(['Legacy Chapter']);
+      const tasks = store.listTasks(1);
+      expect(tasks[0].chapter_id).toBe(1);
+      // And the new tables exist alongside
+      store.createEdition(1, { name: 'E' });
     });
   });
 

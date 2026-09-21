@@ -43,6 +43,29 @@ export function openStore(dataDir = getDataDir()) {
   const db = new Database(path.join(dataDir, 'draftsync.db'));
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
+  // Migrate pre-rename databases ("cards" -> "chapters") before the
+  // schema exec, so CREATE IF NOT EXISTS doesn't create an empty
+  // chapters table alongside the legacy one
+  const tables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")
+    .all()
+    .map(t => t.name);
+  if (tables.includes('cards') && !tables.includes('chapters')) {
+    db.exec(`
+      ALTER TABLE cards RENAME TO chapters;
+      DROP INDEX IF EXISTS idx_cards_project;
+    `);
+    for (const table of ['tasks', 'ai_events', 'edition_chapters']) {
+      if (!tables.includes(table)) continue;
+      const cols = db
+        .prepare(`PRAGMA table_info(${table})`)
+        .all()
+        .map(c => c.name);
+      if (cols.includes('card_id')) {
+        db.exec(`ALTER TABLE ${table} RENAME COLUMN card_id TO chapter_id`);
+      }
+    }
+  }
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY,
@@ -50,7 +73,7 @@ export function openStore(dataDir = getDataDir()) {
       name TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE TABLE IF NOT EXISTS cards (
+    CREATE TABLE IF NOT EXISTS chapters (
       id INTEGER PRIMARY KEY,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       title TEXT NOT NULL,
@@ -61,11 +84,11 @@ export function openStore(dataDir = getDataDir()) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-    CREATE INDEX IF NOT EXISTS idx_cards_project ON cards(project_id, stage, position);
+    CREATE INDEX IF NOT EXISTS idx_chapters_project ON chapters(project_id, stage, position);
     CREATE TABLE IF NOT EXISTS ai_events (
       id INTEGER PRIMARY KEY,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      card_id INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+      chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
       file TEXT,
       provider TEXT NOT NULL,
       source TEXT NOT NULL,
@@ -83,7 +106,7 @@ export function openStore(dataDir = getDataDir()) {
     CREATE TABLE IF NOT EXISTS tasks (
       id INTEGER PRIMARY KEY,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      card_id INTEGER REFERENCES cards(id) ON DELETE SET NULL,
+      chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
       text TEXT NOT NULL,
       done INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
@@ -100,9 +123,9 @@ export function openStore(dataDir = getDataDir()) {
     );
     CREATE TABLE IF NOT EXISTS edition_chapters (
       edition_id INTEGER NOT NULL REFERENCES editions(id) ON DELETE CASCADE,
-      card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+      chapter_id INTEGER NOT NULL REFERENCES chapters(id) ON DELETE CASCADE,
       position INTEGER NOT NULL DEFAULT 0,
-      PRIMARY KEY (edition_id, card_id)
+      PRIMARY KEY (edition_id, chapter_id)
     );
     CREATE TABLE IF NOT EXISTS collections (
       id INTEGER PRIMARY KEY,
@@ -143,7 +166,7 @@ export function openStore(dataDir = getDataDir()) {
 }
 
 /**
- * SQLite-backed store for projects and kanban cards
+ * SQLite-backed store for projects and kanban chapters
  */
 export class Store {
   /** @param {Database.Database} db - Open better-sqlite3 database */
@@ -178,15 +201,15 @@ export class Store {
   }
 
   /**
-   * List all projects with card counts, labeled first then by name
+   * List all projects with chapter counts, labeled first then by name
    *
-   * @returns {Array<Object>} Project rows with cardCount
+   * @returns {Array<Object>} Project rows with chapterCount
    */
   listProjects() {
     return this.db
       .prepare(
-        `SELECT p.*, COUNT(c.id) AS cardCount
-         FROM projects p LEFT JOIN cards c ON c.project_id = p.id
+        `SELECT p.*, COUNT(c.id) AS chapterCount
+         FROM projects p LEFT JOIN chapters c ON c.project_id = p.id
          GROUP BY p.id
          ORDER BY p.label IS NULL, p.label, p.name`
       )
@@ -213,19 +236,19 @@ export class Store {
   }
 
   /**
-   * List a project's cards in board order
+   * List a project's chapters in board order
    *
    * @param {number} projectId - Project ID
    * @returns {Array<Object>} Card rows
    */
-  listCards(projectId) {
+  listChapters(projectId) {
     return this.db
-      .prepare('SELECT * FROM cards WHERE project_id = ? ORDER BY stage, position')
+      .prepare('SELECT * FROM chapters WHERE project_id = ? ORDER BY stage, position')
       .all(projectId);
   }
 
   /**
-   * Create a card at the end of a stage
+   * Create a chapter at the end of a stage
    *
    * @param {number} projectId - Project ID
    * @param {Object} fields - Card fields
@@ -233,105 +256,105 @@ export class Store {
    * @param {string} [fields.stage='drafting'] - Stage key
    * @param {string} [fields.notes=''] - Notes
    * @param {string} [fields.file] - Linked content file path
-   * @returns {Object} The created card
+   * @returns {Object} The created chapter
    */
-  createCard(projectId, { title, stage = 'drafting', notes = '', file = null }) {
+  createChapter(projectId, { title, stage = 'drafting', notes = '', file = null }) {
     if (!title || !title.trim()) throw new Error('title is required');
     if (!STAGE_KEYS.has(stage)) throw new Error(`unknown stage: ${stage}`);
     const { maxPos } = this.db
       .prepare(
-        'SELECT COALESCE(MAX(position), -1) AS maxPos FROM cards WHERE project_id = ? AND stage = ?'
+        'SELECT COALESCE(MAX(position), -1) AS maxPos FROM chapters WHERE project_id = ? AND stage = ?'
       )
       .get(projectId, stage);
     const { lastInsertRowid } = this.db
       .prepare(
-        'INSERT INTO cards (project_id, title, stage, notes, file, position) VALUES (?, ?, ?, ?, ?, ?)'
+        'INSERT INTO chapters (project_id, title, stage, notes, file, position) VALUES (?, ?, ?, ?, ?, ?)'
       )
       .run(projectId, title.trim(), stage, notes, file, maxPos + 1);
-    return this.getCard(lastInsertRowid);
+    return this.getChapter(lastInsertRowid);
   }
 
   /**
-   * Get one card by ID
+   * Get one chapter by ID
    *
    * @param {number} id - Card ID
    * @returns {Object|undefined} Card row
    */
-  getCard(id) {
-    return this.db.prepare('SELECT * FROM cards WHERE id = ?').get(id);
+  getChapter(id) {
+    return this.db.prepare('SELECT * FROM chapters WHERE id = ?').get(id);
   }
 
   /**
-   * Update a card's editable fields
+   * Update a chapter's editable fields
    *
    * @param {number} id - Card ID
    * @param {Object} fields - Any of title, notes, file
-   * @returns {Object|undefined} Updated card
+   * @returns {Object|undefined} Updated chapter
    */
-  updateCard(id, fields) {
+  updateChapter(id, fields) {
     const allowed = ['title', 'notes', 'file'];
     const updates = allowed.filter(k => fields[k] !== undefined);
     if (updates.length > 0) {
       const set = updates.map(k => `${k} = ?`).join(', ');
       this.db
-        .prepare(`UPDATE cards SET ${set}, updated_at = datetime('now') WHERE id = ?`)
+        .prepare(`UPDATE chapters SET ${set}, updated_at = datetime('now') WHERE id = ?`)
         .run(...updates.map(k => fields[k]), id);
     }
-    return this.getCard(id);
+    return this.getChapter(id);
   }
 
   /**
-   * Move a card to a stage and index, reindexing the affected stage
+   * Move a chapter to a stage and index, reindexing the affected stage
    *
    * @param {number} id - Card ID
    * @param {string} stage - Target stage key
    * @param {number} index - Target index within the stage (clamped)
-   * @returns {Object|undefined} Updated card
+   * @returns {Object|undefined} Updated chapter
    */
-  moveCard(id, stage, index) {
+  moveChapter(id, stage, index) {
     if (!STAGE_KEYS.has(stage)) throw new Error(`unknown stage: ${stage}`);
-    const card = this.getCard(id);
-    if (!card) return undefined;
+    const chapter = this.getChapter(id);
+    if (!chapter) return undefined;
 
     const move = this.db.transaction(() => {
       const siblings = this.db
         .prepare(
-          'SELECT id FROM cards WHERE project_id = ? AND stage = ? AND id != ? ORDER BY position'
+          'SELECT id FROM chapters WHERE project_id = ? AND stage = ? AND id != ? ORDER BY position'
         )
-        .all(card.project_id, stage, id)
+        .all(chapter.project_id, stage, id)
         .map(r => r.id);
       const at = Math.max(0, Math.min(index ?? siblings.length, siblings.length));
       siblings.splice(at, 0, id);
 
       const setPos = this.db.prepare(
-        `UPDATE cards SET stage = ?, position = ?, updated_at = datetime('now') WHERE id = ?`
+        `UPDATE chapters SET stage = ?, position = ?, updated_at = datetime('now') WHERE id = ?`
       );
-      siblings.forEach((cardId, pos) => setPos.run(stage, pos, cardId));
+      siblings.forEach((chapterId, pos) => setPos.run(stage, pos, chapterId));
 
-      // Close the gap left in the stage the card came from
-      if (card.stage !== stage) {
+      // Close the gap left in the stage the chapter came from
+      if (chapter.stage !== stage) {
         this.db
-          .prepare('SELECT id FROM cards WHERE project_id = ? AND stage = ? ORDER BY position')
-          .all(card.project_id, card.stage)
-          .forEach((row, pos) => setPos.run(card.stage, pos, row.id));
+          .prepare('SELECT id FROM chapters WHERE project_id = ? AND stage = ? ORDER BY position')
+          .all(chapter.project_id, chapter.stage)
+          .forEach((row, pos) => setPos.run(chapter.stage, pos, row.id));
       }
     });
     move();
-    return this.getCard(id);
+    return this.getChapter(id);
   }
 
   /**
-   * Delete a card
+   * Delete a chapter
    *
    * @param {number} id - Card ID
-   * @returns {boolean} True if a card was deleted
+   * @returns {boolean} True if a chapter was deleted
    */
-  deleteCard(id) {
-    return this.db.prepare('DELETE FROM cards WHERE id = ?').run(id).changes > 0;
+  deleteChapter(id) {
+    return this.db.prepare('DELETE FROM chapters WHERE id = ?').run(id).changes > 0;
   }
 
   /**
-   * File paths already linked to cards in a project
+   * File paths already linked to chapters in a project
    *
    * @param {number} projectId - Project ID
    * @returns {Set<string>} Linked file paths
@@ -339,7 +362,7 @@ export class Store {
   linkedFiles(projectId) {
     return new Set(
       this.db
-        .prepare('SELECT file FROM cards WHERE project_id = ? AND file IS NOT NULL')
+        .prepare('SELECT file FROM chapters WHERE project_id = ? AND file IS NOT NULL')
         .all(projectId)
         .map(r => r.file)
     );
@@ -371,7 +394,7 @@ export class Store {
       sessionKey,
       provider,
       source,
-      cardId = null,
+      chapterId = null,
       file = null,
       url = null,
       model = null,
@@ -391,7 +414,7 @@ export class Store {
 
     if (existing) {
       // Refresh volatile fields; keep user-entered ones (purpose,
-      // justification, card link) as they are
+      // justification, chapter link) as they are
       this.db
         .prepare(
           'UPDATE ai_events SET model = ?, tokens_in = ?, tokens_out = ?, occurred_at = ? WHERE id = ?'
@@ -412,13 +435,13 @@ export class Store {
     const { lastInsertRowid } = this.db
       .prepare(
         `INSERT INTO ai_events
-           (project_id, card_id, file, provider, source, session_key, url, model,
+           (project_id, chapter_id, file, provider, source, session_key, url, model,
             purpose, tokens_in, tokens_out, justification, occurred_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
       )
       .run(
         projectId,
-        cardId,
+        chapterId,
         file,
         provider,
         source,
@@ -470,17 +493,17 @@ export class Store {
   }
 
   /**
-   * List open tasks across all projects, with project and card names
+   * List open tasks across all projects, with project and chapter names
    *
-   * @returns {Array<Object>} Task rows joined with projectName/cardTitle
+   * @returns {Array<Object>} Task rows joined with projectName/chapterTitle
    */
   listAllOpenTasks() {
     return this.db
       .prepare(
-        `SELECT t.*, p.name AS projectName, p.id AS projectId, c.title AS cardTitle
+        `SELECT t.*, p.name AS projectName, p.id AS projectId, c.title AS chapterTitle
          FROM tasks t
          JOIN projects p ON p.id = t.project_id
-         LEFT JOIN cards c ON c.id = t.card_id
+         LEFT JOIN chapters c ON c.id = t.chapter_id
          WHERE t.done = 0
          ORDER BY t.id DESC`
       )
@@ -488,17 +511,17 @@ export class Store {
   }
 
   /**
-   * Create a task, optionally attached to a card
+   * Create a task, optionally attached to a chapter
    *
    * @param {number} projectId - Project ID
-   * @param {Object} fields - {text, cardId}
+   * @param {Object} fields - {text, chapterId}
    * @returns {Object} The created task
    */
-  createTask(projectId, { text, cardId = null }) {
+  createTask(projectId, { text, chapterId = null }) {
     if (!text || !text.trim()) throw new Error('text is required');
     const { lastInsertRowid } = this.db
-      .prepare('INSERT INTO tasks (project_id, card_id, text) VALUES (?, ?, ?)')
-      .run(projectId, cardId, text.trim());
+      .prepare('INSERT INTO tasks (project_id, chapter_id, text) VALUES (?, ?, ?)')
+      .run(projectId, chapterId, text.trim());
     return this.getTask(lastInsertRowid);
   }
 
@@ -552,7 +575,7 @@ export class Store {
   listEditions(projectId) {
     return this.db
       .prepare(
-        `SELECT e.*, COUNT(ec.card_id) AS chapterCount
+        `SELECT e.*, COUNT(ec.chapter_id) AS chapterCount
          FROM editions e LEFT JOIN edition_chapters ec ON ec.edition_id = e.id
          WHERE e.project_id = ?
          GROUP BY e.id ORDER BY e.name`
@@ -631,7 +654,7 @@ export class Store {
   }
 
   /**
-   * The ordered chapters (cards) of an edition
+   * The ordered chapters (chapters) of an edition
    *
    * @param {number} editionId - Edition ID
    * @returns {Array<Object>} Card rows in edition order
@@ -640,7 +663,7 @@ export class Store {
     return this.db
       .prepare(
         `SELECT c.*, ec.position AS editionPosition
-         FROM edition_chapters ec JOIN cards c ON c.id = ec.card_id
+         FROM edition_chapters ec JOIN chapters c ON c.id = ec.chapter_id
          WHERE ec.edition_id = ?
          ORDER BY ec.position`
       )
@@ -651,23 +674,23 @@ export class Store {
    * Replace an edition's ordered chapter membership
    *
    * @param {number} editionId - Edition ID
-   * @param {Array<number>} cardIds - Card IDs in the desired order
+   * @param {Array<number>} chapterIds - Card IDs in the desired order
    * @returns {Array<Object>} The new ordered chapters
    */
-  setEditionChapters(editionId, cardIds) {
+  setEditionChapters(editionId, chapterIds) {
     const edition = this.getEdition(editionId);
     if (!edition) throw new Error('edition not found');
     const replace = this.db.transaction(() => {
       this.db.prepare('DELETE FROM edition_chapters WHERE edition_id = ?').run(editionId);
       const insert = this.db.prepare(
-        'INSERT INTO edition_chapters (edition_id, card_id, position) VALUES (?, ?, ?)'
+        'INSERT INTO edition_chapters (edition_id, chapter_id, position) VALUES (?, ?, ?)'
       );
-      cardIds.forEach((cardId, position) => {
-        const card = this.getCard(cardId);
-        if (!card || card.project_id !== edition.project_id) {
-          throw new Error(`card ${cardId} is not in this project`);
+      chapterIds.forEach((chapterId, position) => {
+        const chapter = this.getChapter(chapterId);
+        if (!chapter || chapter.project_id !== edition.project_id) {
+          throw new Error(`chapter ${chapterId} is not in this project`);
         }
-        insert.run(editionId, cardId, position);
+        insert.run(editionId, chapterId, position);
       });
     });
     replace();

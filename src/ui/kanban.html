@@ -523,12 +523,12 @@
         const root = document.getElementById('board');
         root.innerHTML = '';
         for (const stage of state.stages) {
-          const cards = state.cards.filter(c => c.stage === stage.key);
+          const chapters = state.chapters.filter(c => c.stage === stage.key);
           const col = document.createElement('div');
           col.className = 'column';
 
           const h = document.createElement('h2');
-          h.innerHTML = `<span>${stage.label}</span><span>${cards.length}</span>`;
+          h.innerHTML = `<span>${stage.label}</span><span>${chapters.length}</span>`;
           col.appendChild(h);
 
           const list = document.createElement('div');
@@ -541,35 +541,35 @@
           list.addEventListener('dragleave', () => list.classList.remove('dragover'));
           list.addEventListener('drop', onDrop);
 
-          for (const card of cards) {
+          for (const chapter of chapters) {
             const el = document.createElement('div');
             el.className = 'card';
             el.draggable = true;
-            el.dataset.id = card.id;
-            el.textContent = card.title;
-            if (card.file) {
+            el.dataset.id = chapter.id;
+            el.textContent = chapter.title;
+            if (chapter.file) {
               const f = document.createElement('span');
               f.className = 'file';
-              f.textContent = card.file;
+              f.textContent = chapter.file;
               el.appendChild(f);
             }
-            if (card.gdocUrl) {
+            if (chapter.gdocUrl) {
               const g = document.createElement('a');
               g.className = 'gdoc';
-              g.href = card.gdocUrl;
+              g.href = chapter.gdocUrl;
               g.target = '_blank';
               g.textContent = 'Google Doc ↗';
               g.addEventListener('click', e => e.stopPropagation());
               el.appendChild(g);
             }
-            const openTasks = (state.tasks && state.tasks.openByCard[card.id]) || 0;
+            const openTasks = (state.tasks && state.tasks.openByChapter[chapter.id]) || 0;
             if (openTasks > 0) {
               const t = document.createElement('span');
               t.className = 'task-chip';
               t.textContent = `☐ ${openTasks}`;
               el.appendChild(t);
             }
-            const aiCount = (state.ai && state.ai.byCard[card.id]) || 0;
+            const aiCount = (state.ai && state.ai.byChapter[chapter.id]) || 0;
             if (aiCount > 0) {
               const chip = document.createElement('span');
               chip.className = 'ai-chip';
@@ -578,7 +578,7 @@
             }
             el.addEventListener('dragstart', () => el.classList.add('dragging'));
             el.addEventListener('dragend', () => el.classList.remove('dragging'));
-            el.addEventListener('click', () => openEditor(card));
+            el.addEventListener('click', () => openEditor(chapter));
             list.appendChild(el);
           }
           col.appendChild(list);
@@ -591,7 +591,7 @@
 
           root.appendChild(col);
         }
-        if (state.cards.length === 0) {
+        if (state.chapters.length === 0) {
           const hint = document.createElement('div');
           hint.className = 'empty';
           hint.textContent =
@@ -606,12 +606,12 @@
         list.classList.remove('dragover');
         const dragged = document.querySelector('.card.dragging');
         if (!dragged) return;
-        const cardsBelow = [...list.querySelectorAll('.card:not(.dragging)')];
-        const index = cardsBelow.filter(c => {
+        const chaptersBelow = [...list.querySelectorAll('.card:not(.dragging)')];
+        const index = chaptersBelow.filter(c => {
           const r = c.getBoundingClientRect();
           return e.clientY > r.top + r.height / 2;
         }).length;
-        await api(`${base}/cards/${dragged.dataset.id}`, 'PATCH', {
+        await api(`${base}/chapters/${dragged.dataset.id}`, 'PATCH', {
           stage: list.dataset.stage,
           index
         });
@@ -627,7 +627,7 @@
           const title = input.value.trim();
           input.remove();
           if (commit && title) {
-            await api(`${base}/cards`, 'POST', { title, stage });
+            await api(`${base}/chapters`, 'POST', { title, stage });
             load();
           }
         };
@@ -642,7 +642,7 @@
 
       const renderTasks = async () => {
         const { tasks } = await api(`${base}/tasks`);
-        const mine = tasks.filter(t => t.card_id === editing.id);
+        const mine = tasks.filter(t => t.chapter_id === editing.id);
         const list = document.getElementById('task-list');
         list.innerHTML = '';
         for (const t of mine) {
@@ -670,11 +670,11 @@
         }
       };
 
-      const openEditor = card => {
-        editing = card;
-        document.getElementById('edit-title').value = card.title;
-        document.getElementById('edit-notes').value = card.notes || '';
-        document.getElementById('edit-file').value = card.file || '';
+      const openEditor = chapter => {
+        editing = chapter;
+        document.getElementById('edit-title').value = chapter.title;
+        document.getElementById('edit-notes').value = chapter.notes || '';
+        document.getElementById('edit-file').value = chapter.file || '';
         renderTasks();
         document.getElementById('editor').showModal();
       };
@@ -684,7 +684,7 @@
         e.preventDefault();
         const text = e.target.value.trim();
         if (!text) return;
-        await api(`${base}/tasks`, 'POST', { text, card_id: editing.id });
+        await api(`${base}/tasks`, 'POST', { text, chapter_id: editing.id });
         e.target.value = '';
         renderTasks();
         load();
@@ -707,7 +707,7 @@
       });
 
       document.getElementById('editor-form').addEventListener('submit', async () => {
-        await api(`${base}/cards/${editing.id}`, 'PATCH', {
+        await api(`${base}/chapters/${editing.id}`, 'PATCH', {
           title: document.getElementById('edit-title').value,
           notes: document.getElementById('edit-notes').value,
           file: document.getElementById('edit-file').value || null
@@ -719,7 +719,7 @@
         .addEventListener('click', () => document.getElementById('editor').close());
       document.getElementById('edit-delete').addEventListener('click', async () => {
         if (!confirm('Delete this chapter?')) return;
-        await api(`${base}/cards/${editing.id}`, 'DELETE');
+        await api(`${base}/chapters/${editing.id}`, 'DELETE');
         document.getElementById('editor').close();
         load();
       });
@@ -740,9 +740,9 @@
         const cardSel = document.getElementById('ai-card');
         cardSel.innerHTML =
           '<option value="">Project-wide</option>' +
-          state.cards.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
+          state.chapters.map(c => `<option value="${c.id}">${c.title}</option>`).join('');
         const cardTitle = id => {
-          const c = state.cards.find(x => x.id === id);
+          const c = state.chapters.find(x => x.id === id);
           return c ? c.title : null;
         };
         const list = document.getElementById('ai-list');
@@ -764,7 +764,7 @@
           const meta = document.createElement('div');
           meta.className = 'meta';
           meta.textContent = [
-            cardTitle(e.card_id) || e.file || 'project-wide',
+            cardTitle(e.chapter_id) || e.file || 'project-wide',
             e.model,
             e.tokens_out ? `${e.tokens_in}→${e.tokens_out} tok` : null,
             e.occurred_at ? e.occurred_at.slice(0, 10) : null
@@ -802,7 +802,7 @@
           await api(`${base}/ai-events`, 'POST', {
             url: document.getElementById('ai-url').value || undefined,
             purpose: document.getElementById('ai-purpose').value,
-            card_id: document.getElementById('ai-card').value || undefined,
+            chapter_id: document.getElementById('ai-card').value || undefined,
             justification: document.getElementById('ai-just').value
           });
           document.getElementById('ai-url').value = '';
@@ -848,7 +848,7 @@
         }
         const ids = chapters.map(c => c.id);
         const setChapters = async newIds => {
-          await api(`${base}/editions/${currentEdition}/chapters`, 'PUT', { card_ids: newIds });
+          await api(`${base}/editions/${currentEdition}/chapters`, 'PUT', { chapter_ids: newIds });
           renderEditions(currentEdition);
         };
 
@@ -896,7 +896,7 @@
 
         const available = document.getElementById('ed-available');
         available.innerHTML = '';
-        for (const c of state.cards.filter(c => !ids.includes(c.id))) {
+        for (const c of state.chapters.filter(c => !ids.includes(c.id))) {
           const row = document.createElement('div');
           row.className = 'ed-row excluded';
           const add = document.createElement('button');

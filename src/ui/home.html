@@ -210,7 +210,7 @@
           const where = document.createElement('span');
           where.className = 'where';
           where.innerHTML = `<a href="/p/${t.projectId}">${t.projectName}</a>${
-            t.cardTitle ? ' · ' + t.cardTitle : ''
+            t.chapterTitle ? ' · ' + t.chapterTitle : ''
           }`;
           row.append(check, text, where);
           root.appendChild(row);
@@ -315,7 +315,7 @@
 
             const count = document.createElement('span');
             count.className = 'count';
-            count.textContent = `${p.cardCount} chapter${p.cardCount === 1 ? '' : 's'}`;
+            count.textContent = `${p.chapterCount} chapter${p.chapterCount === 1 ? '' : 's'}`;
             row.appendChild(count);
 
             root.appendChild(row);

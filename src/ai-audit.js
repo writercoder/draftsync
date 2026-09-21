@@ -163,7 +163,7 @@ export async function ingestClaudeCode(store, projectId, projectPath, home = hom
 /**
  * Build a Markdown AI-disclosure report for a project
  *
- * Groups events by chapter (linked card or file) with a project-level
+ * Groups events by chapter (linked chapter or file) with a project-level
  * section, flagging prose-affecting events that lack a justification.
  *
  * @param {import('./store.js').Store} store - Open store
@@ -172,7 +172,7 @@ export async function ingestClaudeCode(store, projectId, projectPath, home = hom
  */
 export function buildAiReport(store, project) {
   const events = store.listAiEvents(project.id);
-  const cardsById = new Map(store.listCards(project.id).map(c => [c.id, c]));
+  const chaptersById = new Map(store.listChapters(project.id).map(c => [c.id, c]));
 
   const describe = e => {
     const bits = [`${e.provider} (${e.source})`];
@@ -190,8 +190,8 @@ export function buildAiReport(store, project) {
 
   const groups = new Map();
   for (const e of events) {
-    const card = e.card_id ? cardsById.get(e.card_id) : null;
-    const key = card ? `Chapter: ${card.title}` : e.file ? `File: ${e.file}` : 'Project-wide';
+    const chapter = e.chapter_id ? chaptersById.get(e.chapter_id) : null;
+    const key = chapter ? `Chapter: ${chapter.title}` : e.file ? `File: ${e.file}` : 'Project-wide';
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(e);
   }

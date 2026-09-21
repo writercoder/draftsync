@@ -96,7 +96,7 @@ describe('Serve Integration Tests', () => {
     });
   });
 
-  describe('board and cards', () => {
+  describe('board and chapters', () => {
     it('should return the board with stages, links, and counts', async () => {
       const { status, body } = await api(`${p}/board`);
       expect(status).toBe(200);
@@ -105,17 +105,17 @@ describe('Serve Integration Tests', () => {
       expect(body.project.driveFolderUrl).toBe('https://drive.google.com/drive/folders/folder-77');
     });
 
-    it('should create, move, and delete a card', async () => {
-      const created = await api(`${p}/cards`, 'POST', { title: 'Chapter 1', stage: 'outline' });
+    it('should create, move, and delete a chapter', async () => {
+      const created = await api(`${p}/chapters`, 'POST', { title: 'Chapter 1', stage: 'outline' });
       expect(created.status).toBe(201);
 
-      const moved = await api(`${p}/cards/${created.body.id}`, 'PATCH', {
+      const moved = await api(`${p}/chapters/${created.body.id}`, 'PATCH', {
         stage: 'revision',
         index: 0
       });
       expect(moved.body.stage).toBe('revision');
 
-      const deleted = await api(`${p}/cards/${created.body.id}`, 'DELETE');
+      const deleted = await api(`${p}/chapters/${created.body.id}`, 'DELETE');
       expect(deleted.body.deleted).toBe(true);
     });
 
@@ -126,28 +126,28 @@ describe('Serve Integration Tests', () => {
       expect(again.body.imported).toBe(0);
 
       const board = await api(`${p}/board`);
-      const opening = board.body.cards.find(c => c.file === 'content/01-opening.md');
+      const opening = board.body.chapters.find(c => c.file === 'content/01-opening.md');
       expect(opening.gdocUrl).toBe('https://docs.google.com/document/d/gdoc-123/edit');
     });
 
-    it('should 404 for unknown projects and cards', async () => {
+    it('should 404 for unknown projects and chapters', async () => {
       expect((await api('/api/p/999/board')).status).toBe(404);
-      expect((await api(`${p}/cards/999`, 'PATCH', { notes: 'x' })).status).toBe(404);
+      expect((await api(`${p}/chapters/999`, 'PATCH', { notes: 'x' })).status).toBe(404);
     });
   });
 
   describe('tasks', () => {
-    it('should manage tasks per card and show open counts on the board', async () => {
-      const card = await api(`${p}/cards`, 'POST', { title: 'Chapter 1' });
+    it('should manage tasks per chapter and show open counts on the board', async () => {
+      const chapter = await api(`${p}/chapters`, 'POST', { title: 'Chapter 1' });
       const task = await api(`${p}/tasks`, 'POST', {
         text: 'Fix pacing per editor notes',
-        card_id: card.body.id
+        chapter_id: chapter.body.id
       });
       expect(task.status).toBe(201);
       await api(`${p}/tasks`, 'POST', { text: 'Project-wide: choose an epigraph' });
 
       const board = await api(`${p}/board`);
-      expect(board.body.tasks.openByCard[card.body.id]).toBe(1);
+      expect(board.body.tasks.openByChapter[chapter.body.id]).toBe(1);
 
       const done = await api(`${p}/tasks/${task.body.id}`, 'PATCH', { done: true });
       expect(done.body.done).toBe(1);
@@ -160,9 +160,9 @@ describe('Serve Integration Tests', () => {
       expect(removed.body.deleted).toBe(true);
     });
 
-    it('should aggregate open tasks globally with project and card names', async () => {
-      const card = await api(`${p}/cards`, 'POST', { title: 'Chapter 1' });
-      await api(`${p}/tasks`, 'POST', { text: 'Open one', card_id: card.body.id });
+    it('should aggregate open tasks globally with project and chapter names', async () => {
+      const chapter = await api(`${p}/chapters`, 'POST', { title: 'Chapter 1' });
+      await api(`${p}/tasks`, 'POST', { text: 'Open one', chapter_id: chapter.body.id });
       const closed = await api(`${p}/tasks`, 'POST', { text: 'Done one' });
       await api(`${p}/tasks/${closed.body.id}`, 'PATCH', { done: true });
 
@@ -171,13 +171,13 @@ describe('Serve Integration Tests', () => {
       expect(global.body.tasks[0]).toMatchObject({
         text: 'Open one',
         projectName: 'my-novel',
-        cardTitle: 'Chapter 1'
+        chapterTitle: 'Chapter 1'
       });
     });
 
-    it('should reject empty tasks and unknown cards', async () => {
+    it('should reject empty tasks and unknown chapters', async () => {
       expect((await api(`${p}/tasks`, 'POST', { text: '  ' })).status).toBe(400);
-      expect((await api(`${p}/tasks`, 'POST', { text: 'x', card_id: 999 })).status).toBe(400);
+      expect((await api(`${p}/tasks`, 'POST', { text: 'x', chapter_id: 999 })).status).toBe(400);
     });
   });
 
@@ -185,9 +185,9 @@ describe('Serve Integration Tests', () => {
     it('should manage editions and build an edition-scoped export', async () => {
       await api(`${p}/import`, 'POST');
       const board = await api(`${p}/board`);
-      const opening = board.body.cards.find(c => c.file === 'content/01-opening.md');
-      const middle = board.body.cards.find(c => c.file === 'content/02-middle.md');
-      const placeholder = await api(`${p}/cards`, 'POST', { title: 'Planned chapter' });
+      const opening = board.body.chapters.find(c => c.file === 'content/01-opening.md');
+      const middle = board.body.chapters.find(c => c.file === 'content/02-middle.md');
+      const placeholder = await api(`${p}/chapters`, 'POST', { title: 'Planned chapter' });
 
       const edition = await api(`${p}/editions`, 'POST', {
         name: "Reader's Edition",
@@ -196,7 +196,7 @@ describe('Serve Integration Tests', () => {
       expect(edition.status).toBe(201);
 
       const set = await api(`${p}/editions/${edition.body.id}/chapters`, 'PUT', {
-        card_ids: [middle.id, opening.id, placeholder.body.id]
+        chapter_ids: [middle.id, opening.id, placeholder.body.id]
       });
       expect(set.body.chapters.map(c => c.title)).toEqual([
         '02-middle',
@@ -220,7 +220,8 @@ describe('Serve Integration Tests', () => {
     it('should reject invalid membership payloads and empty-file editions', async () => {
       const edition = await api(`${p}/editions`, 'POST', { name: 'Empty' });
       expect(
-        (await api(`${p}/editions/${edition.body.id}/chapters`, 'PUT', { card_ids: 'nope' })).status
+        (await api(`${p}/editions/${edition.body.id}/chapters`, 'PUT', { chapter_ids: 'nope' }))
+          .status
       ).toBe(400);
       expect((await api(`${p}/export/epub?edition=${edition.body.id}`)).status).toBe(500);
       expect((await api(`${p}/editions`, 'POST', { name: 'Empty' })).status).toBe(400);
@@ -321,18 +322,18 @@ describe('Serve Integration Tests', () => {
 
   describe('AI events', () => {
     it('should manage AI events with provider auto-detection', async () => {
-      const card = await api(`${p}/cards`, 'POST', { title: 'Chapter 1' });
+      const chapter = await api(`${p}/chapters`, 'POST', { title: 'Chapter 1' });
       const created = await api(`${p}/ai-events`, 'POST', {
         url: 'https://claude.ai/chat/abc',
         purpose: 'critique',
-        card_id: card.body.id,
+        chapter_id: chapter.body.id,
         justification: 'asked for pacing feedback'
       });
       expect(created.status).toBe(201);
       expect(created.body.provider).toBe('anthropic');
 
       const board = await api(`${p}/board`);
-      expect(board.body.ai.byCard[card.body.id]).toBe(1);
+      expect(board.body.ai.byChapter[chapter.body.id]).toBe(1);
 
       const removed = await api(`${p}/ai-events/${created.body.id}`, 'DELETE');
       expect(removed.body.deleted).toBe(true);

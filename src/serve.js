@@ -6,7 +6,7 @@
  * single SQLite store in ~/.draftsync. Binds to localhost only.
  *
  * Routes: `/` home, `/p/:id` board, `/api/projects` registry, and
- * project-scoped APIs under `/api/p/:id/...` (board, cards, import,
+ * project-scoped APIs under `/api/p/:id/...` (board, chapters, import,
  * ai-events, ai-ingest, export, metadata).
  */
 
@@ -62,7 +62,7 @@ function readBody(req) {
 }
 
 /**
- * Derive a card title from a Markdown file (first H1, else basename)
+ * Derive a chapter title from a Markdown file (first H1, else basename)
  *
  * @param {string} filePath - Path to the Markdown file
  * @returns {Promise<string>} Title
@@ -372,7 +372,7 @@ export function createDraftsyncServer({ store }) {
       const project = store.getProject(Number(scoped[1]));
       if (!project) return send(404, { error: 'project not found' });
       const route = scoped[2];
-      const cardMatch = route.match(/^\/cards\/(\d+)$/);
+      const chapterMatch = route.match(/^\/chapters\/(\d+)$/);
       const taskMatch = route.match(/^\/tasks\/(\d+)$/);
       const aiMatch = route.match(/^\/ai-events\/(\d+)$/);
       const editionMatch = route.match(/^\/editions\/(\d+)$/);
@@ -383,18 +383,19 @@ export function createDraftsyncServer({ store }) {
         const aiEvents = store.listAiEvents(project.id);
         const aiCounts = {};
         for (const e of aiEvents) {
-          if (e.card_id) aiCounts[e.card_id] = (aiCounts[e.card_id] || 0) + 1;
+          if (e.chapter_id) aiCounts[e.chapter_id] = (aiCounts[e.chapter_id] || 0) + 1;
         }
         const manifest = await readProjectManifest(project.path);
-        const cards = store.listCards(project.id).map(card => {
-          const gdocId = card.file && manifest.files?.[card.file]?.gdocId;
+        const chapters = store.listChapters(project.id).map(chapter => {
+          const gdocId = chapter.file && manifest.files?.[chapter.file]?.gdocId;
           return gdocId
-            ? { ...card, gdocUrl: `https://docs.google.com/document/d/${gdocId}/edit` }
-            : card;
+            ? { ...chapter, gdocUrl: `https://docs.google.com/document/d/${gdocId}/edit` }
+            : chapter;
         });
         const taskCounts = {};
         for (const t of store.listTasks(project.id)) {
-          if (!t.done && t.card_id) taskCounts[t.card_id] = (taskCounts[t.card_id] || 0) + 1;
+          if (!t.done && t.chapter_id)
+            taskCounts[t.chapter_id] = (taskCounts[t.chapter_id] || 0) + 1;
         }
         const driveFolderId = manifest.config?.driveFolderId;
         return send(200, {
@@ -408,9 +409,9 @@ export function createDraftsyncServer({ store }) {
               : null
           },
           stages: STAGES,
-          cards,
-          tasks: { openByCard: taskCounts },
-          ai: { total: aiEvents.length, byCard: aiCounts }
+          chapters,
+          tasks: { openByChapter: taskCounts },
+          ai: { total: aiEvents.length, byChapter: aiCounts }
         });
       }
 
@@ -419,17 +420,17 @@ export function createDraftsyncServer({ store }) {
       }
       if (req.method === 'POST' && route === '/tasks') {
         const body = await readBody(req);
-        if (body.card_id) {
-          const card = store.getCard(Number(body.card_id));
-          if (!card || card.project_id !== project.id) {
-            return send(400, { error: 'unknown card' });
+        if (body.chapter_id) {
+          const chapter = store.getChapter(Number(body.chapter_id));
+          if (!chapter || chapter.project_id !== project.id) {
+            return send(400, { error: 'unknown chapter' });
           }
         }
         return send(
           201,
           store.createTask(project.id, {
             text: body.text,
-            cardId: body.card_id ? Number(body.card_id) : null
+            chapterId: body.chapter_id ? Number(body.chapter_id) : null
           })
         );
       }
@@ -459,7 +460,7 @@ export function createDraftsyncServer({ store }) {
             const chapters = store.listEditionChapters(edition.id);
             exportOptions = {
               editionName: edition.name,
-              // Placeholder cards without linked files are skipped
+              // Placeholder chapters without linked files are skipped
               editionFiles: chapters.filter(c => c.file).map(c => path.join(project.path, c.file))
             };
           }
@@ -494,32 +495,32 @@ export function createDraftsyncServer({ store }) {
         return send(200, { saved: true });
       }
 
-      if (req.method === 'POST' && route === '/cards') {
+      if (req.method === 'POST' && route === '/chapters') {
         const body = await readBody(req);
-        return send(201, store.createCard(project.id, body));
+        return send(201, store.createChapter(project.id, body));
       }
 
-      if (req.method === 'PATCH' && cardMatch) {
-        const id = Number(cardMatch[1]);
-        const existing = store.getCard(id);
+      if (req.method === 'PATCH' && chapterMatch) {
+        const id = Number(chapterMatch[1]);
+        const existing = store.getChapter(id);
         if (!existing || existing.project_id !== project.id) {
-          return send(404, { error: 'card not found' });
+          return send(404, { error: 'chapter not found' });
         }
         const body = await readBody(req);
-        let card = store.updateCard(id, body);
+        let chapter = store.updateChapter(id, body);
         if (body.stage !== undefined || body.index !== undefined) {
-          card = store.moveCard(id, body.stage ?? card.stage, body.index);
+          chapter = store.moveChapter(id, body.stage ?? chapter.stage, body.index);
         }
-        return send(200, card);
+        return send(200, chapter);
       }
 
-      if (req.method === 'DELETE' && cardMatch) {
-        const id = Number(cardMatch[1]);
-        const existing = store.getCard(id);
+      if (req.method === 'DELETE' && chapterMatch) {
+        const id = Number(chapterMatch[1]);
+        const existing = store.getChapter(id);
         if (!existing || existing.project_id !== project.id) {
-          return send(404, { error: 'card not found' });
+          return send(404, { error: 'chapter not found' });
         }
-        store.deleteCard(id);
+        store.deleteChapter(id);
         return send(200, { deleted: true });
       }
 
@@ -537,14 +538,14 @@ export function createDraftsyncServer({ store }) {
           const relative = path.relative(project.path, file);
           if (linked.has(relative)) continue;
           imported.push(
-            store.createCard(project.id, {
+            store.createChapter(project.id, {
               title: await titleFromFile(file),
               stage: 'drafting',
               file: relative
             })
           );
         }
-        return send(200, { imported: imported.length, cards: imported });
+        return send(200, { imported: imported.length, chapters: imported });
       }
 
       if (req.method === 'GET' && route === '/editions') {
@@ -561,10 +562,10 @@ export function createDraftsyncServer({ store }) {
         }
         if (editionChaptersMatch && req.method === 'PUT') {
           const body = await readBody(req);
-          if (!Array.isArray(body.card_ids)) {
-            return send(400, { error: 'card_ids (array) is required' });
+          if (!Array.isArray(body.chapter_ids)) {
+            return send(400, { error: 'chapter_ids (array) is required' });
           }
-          return send(200, { chapters: store.setEditionChapters(edition.id, body.card_ids) });
+          return send(200, { chapters: store.setEditionChapters(edition.id, body.chapter_ids) });
         }
         if (editionMatch && req.method === 'GET') {
           return send(200, { edition, chapters: store.listEditionChapters(edition.id) });
@@ -596,12 +597,12 @@ export function createDraftsyncServer({ store }) {
           return send(400, { error: 'prose-suggestion requires a justification (AI policy)' });
         }
         let file = body.file || null;
-        if (body.card_id) {
-          const card = store.getCard(Number(body.card_id));
-          if (!card || card.project_id !== project.id) {
-            return send(400, { error: 'unknown card' });
+        if (body.chapter_id) {
+          const chapter = store.getChapter(Number(body.chapter_id));
+          if (!chapter || chapter.project_id !== project.id) {
+            return send(400, { error: 'unknown chapter' });
           }
-          file = file || card.file;
+          file = file || chapter.file;
         }
         const { event } = store.upsertAiEvent(project.id, {
           sessionKey: body.url || `manual:${crypto.randomUUID()}`,
@@ -609,7 +610,7 @@ export function createDraftsyncServer({ store }) {
           source: body.url ? 'chat-link' : 'manual',
           url: body.url || null,
           model: body.model || null,
-          cardId: body.card_id ? Number(body.card_id) : null,
+          chapterId: body.chapter_id ? Number(body.chapter_id) : null,
           file,
           purpose: body.purpose,
           justification: body.justification || ''
