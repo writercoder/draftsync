@@ -4,60 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>draftsync collection</title>
+    <link rel="icon" href="/assets/heron.svg" />
+    <link rel="stylesheet" href="/assets/tokens.css" />
+    <link rel="stylesheet" href="/assets/draftsync.css" />
     <style>
-      :root {
-        --ground: #fbfaf7;
-        --card: #ffffff;
-        --column: #f0eee7;
-        --ink: #232830;
-        --muted: #6b7480;
-        --accent: #2f5a8f;
-        --line: #e0ddd4;
-        --danger: #b5342e;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --ground: #14171c;
-          --card: #232a33;
-          --column: #1b2027;
-          --ink: #e9e6df;
-          --muted: #99a1ab;
-          --accent: #7fa8d9;
-          --line: #2a3038;
-          --danger: #e06054;
-        }
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        background: var(--ground);
-        color: var(--ink);
-        font:
-          15px/1.5 -apple-system,
-          'Segoe UI',
-          system-ui,
-          sans-serif;
-      }
-      header {
-        display: flex;
-        align-items: baseline;
-        gap: 0.75rem;
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--line);
-      }
-      header h1 {
-        font-size: 1.1rem;
-        margin: 0;
-      }
-      header a {
-        color: var(--accent);
-        font-size: 0.82rem;
-        text-decoration: none;
-      }
       header .desc {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.85rem;
         flex: 1;
       }
@@ -66,53 +18,34 @@
         margin: 0 auto;
         padding: 1.5rem;
       }
-      h2 {
-        font-size: 0.75rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin: 1.6rem 0 0.5rem;
-      }
       .row {
         display: flex;
         align-items: baseline;
         gap: 0.5rem;
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 6px;
+        background: var(--paper-raised);
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius);
         padding: 0.45rem 0.8rem;
         margin-bottom: 0.4rem;
       }
       .row.muted {
-        background: var(--column);
+        background: var(--paper-sunken);
         border-style: dashed;
       }
       .row span.t {
         flex: 1;
       }
       .row.muted span.t {
-        color: var(--muted);
+        color: var(--ink-soft);
       }
       .row a {
-        color: var(--accent);
         text-decoration: none;
         font-weight: 600;
       }
-      button {
-        font: inherit;
-        color: var(--ink);
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 6px;
+      .row button,
+      .edition button {
         padding: 0.15rem 0.55rem;
         font-size: 0.78rem;
-        cursor: pointer;
-      }
-      button:hover {
-        border-color: var(--accent);
-      }
-      button.danger {
-        color: var(--danger);
       }
       .downloads {
         display: flex;
@@ -120,15 +53,12 @@
         font-size: 0.85rem;
         align-items: baseline;
       }
-      .downloads a {
-        color: var(--accent);
-      }
       .edition {
-        border: 1px solid var(--line);
-        border-radius: 8px;
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius-large);
         padding: 0.8rem 1rem;
         margin-bottom: 0.8rem;
-        background: var(--card);
+        background: var(--paper-raised);
       }
       .edition .head {
         display: flex;
@@ -144,7 +74,9 @@
   <body>
     <header>
       <a href="/">← Projects</a>
-      <h1 id="col-name">collection</h1>
+      <h1>
+        <img class="logo" src="/assets/heron.svg" alt="" /> <span id="col-name">collection</span>
+      </h1>
       <span class="desc" id="col-desc"></span>
       <span class="downloads">
         <span style="color: var(--muted)">Download all:</span>

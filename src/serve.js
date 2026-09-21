@@ -101,8 +101,18 @@ export function createDraftsyncServer({ store }) {
       const p = url.pathname;
       const m = pattern => p.match(pattern);
 
-      // Pages
+      // Pages and static assets
       if (req.method === 'GET' && p === '/') return await sendPage('home.html');
+      if (req.method === 'GET' && p === '/design') return await sendPage('design.html');
+      const asset = m(/^\/assets\/([\w-]+\.(css|svg))$/);
+      if (asset && req.method === 'GET') {
+        try {
+          const body = await fs.readFile(path.join(UI_DIR, 'assets', asset[1]), 'utf8');
+          return send(200, body, asset[2] === 'css' ? 'text/css' : 'image/svg+xml');
+        } catch {
+          return send(404, { error: 'not found' });
+        }
+      }
       if (req.method === 'GET' && m(/^\/p\/\d+$/)) return await sendPage('kanban.html');
       if (req.method === 'GET' && m(/^\/c\/\d+$/)) return await sendPage('collection.html');
 

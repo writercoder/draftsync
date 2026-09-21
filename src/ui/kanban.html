@@ -4,89 +4,41 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>draftsync board</title>
+    <link rel="icon" href="/assets/heron.svg" />
+    <link rel="stylesheet" href="/assets/tokens.css" />
+    <link rel="stylesheet" href="/assets/draftsync.css" />
     <style>
-      :root {
-        --ground: #fbfaf7;
-        --column: #f0eee7;
-        --card: #ffffff;
-        --ink: #232830;
-        --muted: #6b7480;
-        --accent: #2f5a8f;
-        --line: #e0ddd4;
-        --danger: #b5342e;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --ground: #14171c;
-          --column: #1b2027;
-          --card: #232a33;
-          --ink: #e9e6df;
-          --muted: #99a1ab;
-          --accent: #7fa8d9;
-          --line: #2a3038;
-          --danger: #e06054;
-        }
-      }
-      * {
-        box-sizing: border-box;
-      }
       body {
-        margin: 0;
-        background: var(--ground);
-        color: var(--ink);
-        font:
-          15px/1.5 -apple-system,
-          'Segoe UI',
-          system-ui,
-          sans-serif;
         height: 100vh;
         display: flex;
         flex-direction: column;
       }
-      header {
-        display: flex;
-        align-items: baseline;
-        gap: 0.75rem;
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--line);
-      }
-      header h1 {
-        font-size: 1.1rem;
-        margin: 0;
-      }
       header .path {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.8rem;
         flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      button {
-        font: inherit;
-        color: var(--ink);
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 0.35rem 0.8rem;
-        cursor: pointer;
+      .downloads {
+        display: flex;
+        gap: 0.5rem;
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius);
+        padding: 0.3rem 0.7rem;
       }
-      button:hover {
-        border-color: var(--accent);
+      .downloads a {
+        font-size: 0.82rem;
+        text-decoration: none;
       }
-      button:focus-visible {
-        outline: 2px solid var(--accent);
-        outline-offset: 1px;
-      }
-      button.primary {
-        background: var(--accent);
-        border-color: var(--accent);
-        color: #fff;
-      }
-      button.danger {
-        color: var(--danger);
+      .downloads::before {
+        content: 'Download:';
+        color: var(--ink-soft);
+        font-size: 0.82rem;
       }
 
+      /* Board — PM infrastructure */
       .board {
         flex: 1;
         display: flex;
@@ -96,8 +48,8 @@
         align-items: flex-start;
       }
       .column {
-        background: var(--column);
-        border-radius: 8px;
+        background: var(--paper-sunken);
+        border-radius: var(--radius-large);
         min-width: 240px;
         width: 240px;
         max-height: 100%;
@@ -105,10 +57,6 @@
         flex-direction: column;
       }
       .column h2 {
-        font-size: 0.75rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--muted);
         margin: 0;
         padding: 0.75rem 0.9rem 0.4rem;
         display: flex;
@@ -121,113 +69,37 @@
         flex: 1;
       }
       .card {
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 6px;
+        background: var(--paper-raised);
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius);
         padding: 0.5rem 0.7rem;
         margin-bottom: 0.5rem;
         cursor: grab;
       }
       .card:hover {
-        border-color: var(--accent);
-      }
-      .card .file {
-        display: block;
-        color: var(--muted);
-        font-size: 0.72rem;
-        margin-top: 0.2rem;
-        overflow-wrap: anywhere;
+        border-color: var(--infra);
       }
       .card.dragging {
         opacity: 0.4;
       }
       .cards.dragover {
-        outline: 2px dashed var(--accent);
+        outline: 2px dashed var(--infra);
         outline-offset: -4px;
-        border-radius: 6px;
+        border-radius: var(--radius);
       }
-      .add {
-        border: none;
-        background: none;
-        color: var(--muted);
-        text-align: left;
-        padding: 0.4rem 0.9rem 0.7rem;
-        cursor: pointer;
-      }
-      .add:hover {
-        color: var(--accent);
-      }
-      .add-input {
-        font: inherit;
-        margin: 0 0.6rem 0.6rem;
-        padding: 0.45rem 0.6rem;
-        border: 1px solid var(--accent);
-        border-radius: 6px;
-        background: var(--card);
-        color: var(--ink);
-      }
-
-      dialog {
-        background: var(--card);
-        color: var(--ink);
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 1.2rem 1.4rem;
-        width: min(30rem, 92vw);
-      }
-      dialog::backdrop {
-        background: rgba(0, 0, 0, 0.35);
-      }
-      dialog label {
+      .card .file {
         display: block;
-        font-size: 0.78rem;
-        color: var(--muted);
-        margin: 0.8rem 0 0.25rem;
-      }
-      dialog input[type='text'],
-      dialog textarea {
-        width: 100%;
-        font: inherit;
-        padding: 0.45rem 0.6rem;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--ground);
-        color: var(--ink);
-      }
-      dialog textarea {
-        min-height: 6rem;
-        resize: vertical;
-      }
-      .dialog-actions {
-        display: flex;
-        justify-content: space-between;
-        margin-top: 1.1rem;
-      }
-      header a,
-      .downloads a {
-        color: var(--accent);
-        font-size: 0.82rem;
-        text-decoration: none;
-      }
-      header a:hover {
-        text-decoration: underline;
-      }
-      .downloads {
-        display: flex;
-        gap: 0.5rem;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        padding: 0.3rem 0.7rem;
-      }
-      .downloads::before {
-        content: 'Download:';
-        color: var(--muted);
-        font-size: 0.82rem;
+        color: var(--ink-soft);
+        font-size: 0.72rem;
+        margin-top: 0.2rem;
+        overflow-wrap: anywhere;
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
       }
       .card .gdoc {
         display: inline-block;
         font-size: 0.72rem;
-        color: var(--accent);
+        color: var(--infra);
         text-decoration: none;
         margin-top: 0.25rem;
         margin-right: 0.4rem;
@@ -235,22 +107,121 @@
       .card .gdoc:hover {
         text-decoration: underline;
       }
+
+      /* Zone 1 — manuscript-derived text on cards */
+      .card .excerpt {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        font-family: var(--font-authorly);
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+        line-height: 1.35;
+        margin-top: 0.25rem;
+      }
+      .card .words {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 0.7rem;
+        margin-top: 0.15rem;
+        font-variant-numeric: tabular-nums;
+      }
+
+      .add {
+        border: none;
+        background: none;
+        color: var(--ink-soft);
+        text-align: left;
+        padding: 0.4rem 0.9rem 0.7rem;
+      }
+      .add:hover {
+        color: var(--infra);
+      }
+      .add-input {
+        margin: 0 0.6rem 0.6rem;
+        border-color: var(--infra);
+        width: auto;
+      }
+      .empty {
+        color: var(--ink-soft);
+        padding: 2rem;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+
+      /* Chips: tasks are zone 2, AI is zone 3 */
+      .task-chip {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--infra-soft);
+        border: 1px solid var(--ink-faint);
+        border-radius: 999px;
+        padding: 0 0.45rem;
+        margin-top: 0.25rem;
+        margin-right: 0.3rem;
+      }
+      .ai-chip {
+        display: inline-block;
+        font-size: 0.68rem;
+        font-weight: 600;
+        color: var(--ai-pink);
+        border: 1px solid var(--ai-pink);
+        background: var(--ai-wash);
+        border-radius: 999px;
+        padding: 0 0.45rem;
+        margin-top: 0.25rem;
+      }
+
+      /* Timeline */
+      .tl-item {
+        display: flex;
+        gap: 0.55rem;
+        align-items: baseline;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid var(--ink-faint);
+        font-size: 0.85rem;
+      }
+      .tl-item .when {
+        color: var(--ink-soft);
+        font-size: 0.72rem;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .tl-item .kind {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--infra);
+        white-space: nowrap;
+      }
+      .tl-item .what {
+        flex: 1;
+      }
+      .tl-scroll {
+        max-height: 22rem;
+        overflow-y: auto;
+      }
+
+      /* Editions dialog */
       .ed-row {
         display: flex;
         align-items: baseline;
         gap: 0.5rem;
         padding: 0.28rem 0;
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--ink-faint);
         font-size: 0.9rem;
       }
       .ed-row span.t {
         flex: 1;
       }
       .ed-row.excluded span.t {
-        color: var(--muted);
+        color: var(--ink-soft);
       }
       .ed-row .nofile {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.72rem;
         font-style: italic;
       }
@@ -266,6 +237,7 @@
       }
       .ed-head select {
         flex: 1;
+        width: auto;
       }
       .ed-downloads {
         display: flex;
@@ -273,73 +245,15 @@
         margin: 0.6rem 0 0.2rem;
         font-size: 0.85rem;
       }
-      .ed-downloads a {
-        color: var(--accent);
-      }
       .ed-section {
         font-size: 0.72rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
-        color: var(--muted);
+        color: var(--ink-soft);
         margin: 0.9rem 0 0.2rem;
       }
-      .card .excerpt {
-        display: -webkit-box;
-        -webkit-line-clamp: 2;
-        -webkit-box-orient: vertical;
-        overflow: hidden;
-        color: var(--muted);
-        font-size: 0.76rem;
-        line-height: 1.35;
-        margin-top: 0.25rem;
-      }
-      .card .words {
-        display: block;
-        color: var(--muted);
-        font-size: 0.7rem;
-        margin-top: 0.15rem;
-        font-variant-numeric: tabular-nums;
-      }
-      .tl-item {
-        display: flex;
-        gap: 0.55rem;
-        align-items: baseline;
-        padding: 0.35rem 0;
-        border-bottom: 1px solid var(--line);
-        font-size: 0.85rem;
-      }
-      .tl-item .when {
-        color: var(--muted);
-        font-size: 0.72rem;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-      .tl-item .kind {
-        font-size: 0.68rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--accent);
-        white-space: nowrap;
-      }
-      .tl-item .what {
-        flex: 1;
-      }
-      .tl-scroll {
-        max-height: 22rem;
-        overflow-y: auto;
-      }
-      .task-chip {
-        display: inline-block;
-        font-size: 0.68rem;
-        font-weight: 600;
-        color: var(--muted);
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        padding: 0 0.45rem;
-        margin-top: 0.25rem;
-        margin-right: 0.3rem;
-      }
+
+      /* Tasks in the chapter editor */
       #task-list .task {
         display: flex;
         align-items: baseline;
@@ -349,7 +263,7 @@
       }
       #task-list .task.done span {
         text-decoration: line-through;
-        color: var(--muted);
+        color: var(--ink-soft);
       }
       #task-list .task span {
         flex: 1;
@@ -359,73 +273,52 @@
         padding: 0.05rem 0.4rem;
       }
       #task-new {
-        width: 100%;
-        font: inherit;
-        padding: 0.45rem 0.6rem;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--ground);
-        color: var(--ink);
+        margin-top: 0.2rem;
       }
-      .ai-chip {
-        display: inline-block;
-        font-size: 0.68rem;
-        font-weight: 600;
-        color: var(--accent);
-        border: 1px solid var(--accent);
-        border-radius: 999px;
-        padding: 0 0.45rem;
-        margin-top: 0.25rem;
-      }
+
+      /* Feed lists (AI log, reviews) */
       .ai-list {
         max-height: 14rem;
         overflow-y: auto;
         margin-top: 0.6rem;
-        border-top: 1px solid var(--line);
+        border-top: 1px solid var(--ink-faint);
       }
       .ai-event {
-        border-bottom: 1px solid var(--line);
+        border-bottom: 1px solid var(--ink-faint);
         padding: 0.5rem 0;
         font-size: 0.85rem;
       }
       .ai-event .meta {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.75rem;
       }
       .ai-event a {
-        color: var(--accent);
+        color: var(--ai-pink);
         overflow-wrap: anywhere;
       }
       .ai-event .just {
         font-style: italic;
-        color: var(--muted);
+        color: var(--ink-soft);
       }
       .ai-event button {
         float: right;
         font-size: 0.7rem;
         padding: 0.1rem 0.45rem;
       }
-      dialog select {
-        font: inherit;
-        padding: 0.45rem 0.6rem;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--ground);
-        color: var(--ink);
-        width: 100%;
-      }
-      .empty {
-        color: var(--muted);
-        padding: 2rem;
-        text-align: center;
-        font-size: 0.9rem;
+      #meta-content {
+        min-height: 18rem;
+        font-family: var(--font-mono);
+        font-size: 0.82rem;
       }
     </style>
   </head>
   <body>
     <header>
       <a href="/" style="font-size: 0.82rem">← Projects</a>
-      <h1 id="project-name">draftsync board</h1>
+      <h1>
+        <img class="logo" src="/assets/heron.svg" alt="" />
+        <span id="project-name">draftsync board</span>
+      </h1>
       <span class="path" id="project-path"></span>
       <a id="drive-link" href="#" target="_blank" style="display: none">Drive folder ↗</a>
       <span class="downloads">
@@ -529,10 +422,7 @@
       <form id="meta-form">
         <strong>metadata.yaml</strong>
         <label for="meta-content">EPUB/DOCX metadata for this project (YAML)</label>
-        <textarea
-          id="meta-content"
-          style="min-height: 18rem; font-family: ui-monospace, monospace; font-size: 0.82rem"
-        ></textarea>
+        <textarea id="meta-content"></textarea>
         <div class="dialog-actions">
           <span></span>
           <span>

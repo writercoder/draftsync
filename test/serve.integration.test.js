@@ -63,6 +63,23 @@ describe('Serve Integration Tests', () => {
   };
 
   describe('pages and registry', () => {
+    it('should serve the design page and shared assets', async () => {
+      const design = await fetch(base + '/design');
+      expect(design.status).toBe(200);
+      expect(await design.text()).toContain('The three zones');
+
+      const tokens = await fetch(base + '/assets/tokens.css');
+      expect(tokens.status).toBe(200);
+      expect(tokens.headers.get('content-type')).toBe('text/css');
+      expect(await tokens.text()).toContain('--ai-pink');
+
+      const logo = await fetch(base + '/assets/heron.svg');
+      expect(logo.headers.get('content-type')).toBe('image/svg+xml');
+
+      expect((await fetch(base + '/assets/nope.css')).status).toBe(404);
+      expect((await fetch(base + '/assets/..%2Fkanban.html')).status).toBe(404);
+    });
+
     it('should serve the home page at / and the board at /p/:id', async () => {
       const home = await fetch(base + '/');
       expect(home.status).toBe(200);

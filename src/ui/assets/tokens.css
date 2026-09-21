@@ -1,0 +1,81 @@
+/**
+ * draftsync design tokens — the single source of color, type, and space.
+ *
+ * The UI contains exactly three things, each with its own zone:
+ *   1. Text & writing — authorly, black and white, "Once upon a time…"
+ *      (subtle). Tokens: --ink-*, --paper-*.
+ *   2. Project management — blue, grey; helpful infrastructure.
+ *      Tokens: --infra-*.
+ *   3. AI — pink, green, orange. Tokens: --ai-*.
+ *
+ * Rule: color carries domain meaning. An element takes its palette from
+ * the zone it belongs to — never decorate across zones. AI presence must
+ * always be visually legible (see DESIGN.md).
+ *
+ * No hex values outside this file.
+ */
+
+:root {
+  /* Zone 1 — text & writing (authorly monochrome) */
+  --paper: #fbfaf7;
+  --paper-raised: #ffffff;
+  --paper-sunken: #f0eee7;
+  --ink: #232830;
+  --ink-soft: #6b7480;
+  --ink-faint: #e0ddd8;
+
+  /* Zone 2 — project management (infrastructure) */
+  --infra: #2f5a8f;
+  --infra-soft: #5c7185;
+  --infra-wash: #eef2f6;
+
+  /* Zone 3 — AI */
+  --ai-pink: #c74b7e;
+  --ai-green: #2e8b6b;
+  --ai-orange: #d9772b;
+  --ai-wash: #faf0f4;
+
+  /* Signals (zone-independent) */
+  --danger: #b5342e;
+
+  /* Type */
+  --font-ui: 15px/1.5 -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-authorly: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, monospace;
+
+  /* Space and shape */
+  --radius: 6px;
+  --radius-large: 8px;
+  --gap: 0.6rem;
+  --pad: 1rem;
+
+  /* Legacy aliases (pre-token names used by existing page styles) */
+  --ground: var(--paper);
+  --card: var(--paper-raised);
+  --column: var(--paper-sunken);
+  --muted: var(--ink-soft);
+  --accent: var(--infra);
+  --line: var(--ink-faint);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #14171c;
+    --paper-raised: #232a33;
+    --paper-sunken: #1b2027;
+    --ink: #e9e6df;
+    --ink-soft: #99a1ab;
+    --ink-faint: #2a3038;
+
+    --infra: #7fa8d9;
+    --infra-soft: #8fa6ba;
+    --infra-wash: #1d2531;
+
+    --ai-pink: #e58bb0;
+    --ai-green: #6fcba8;
+    --ai-orange: #efa45e;
+    --ai-wash: #2b2026;
+
+    --danger: #e06054;
+  }
+}

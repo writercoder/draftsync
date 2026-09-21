@@ -4,53 +4,12 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>draftsync</title>
+    <link rel="icon" href="/assets/heron.svg" />
+    <link rel="stylesheet" href="/assets/tokens.css" />
+    <link rel="stylesheet" href="/assets/draftsync.css" />
     <style>
-      :root {
-        --ground: #fbfaf7;
-        --card: #ffffff;
-        --column: #f0eee7;
-        --ink: #232830;
-        --muted: #6b7480;
-        --accent: #2f5a8f;
-        --line: #e0ddd4;
-      }
-      @media (prefers-color-scheme: dark) {
-        :root {
-          --ground: #14171c;
-          --card: #232a33;
-          --column: #1b2027;
-          --ink: #e9e6df;
-          --muted: #99a1ab;
-          --accent: #7fa8d9;
-          --line: #2a3038;
-        }
-      }
-      * {
-        box-sizing: border-box;
-      }
-      body {
-        margin: 0;
-        background: var(--ground);
-        color: var(--ink);
-        font:
-          15px/1.5 -apple-system,
-          'Segoe UI',
-          system-ui,
-          sans-serif;
-      }
-      header {
-        display: flex;
-        align-items: baseline;
-        gap: 0.75rem;
-        padding: 1rem 1.5rem;
-        border-bottom: 1px solid var(--line);
-      }
-      header h1 {
-        font-size: 1.1rem;
-        margin: 0;
-      }
-      header span {
-        color: var(--muted);
+      header span.tag {
+        color: var(--ink-soft);
         font-size: 0.8rem;
       }
       main {
@@ -58,22 +17,15 @@
         margin: 0 auto;
         padding: 1.5rem;
       }
-      h2 {
-        font-size: 0.75rem;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: var(--muted);
-        margin: 1.6rem 0 0.6rem;
-      }
       .project {
         display: flex;
         align-items: baseline;
         gap: 0.8rem;
-        background: var(--card);
-        border: 1px solid var(--line);
-        border-radius: 8px;
+        background: var(--paper-raised);
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius-large);
         padding: 0.7rem 1rem;
-        margin-bottom: 0.6rem;
+        margin-bottom: var(--gap);
       }
       .project a.name {
         color: var(--ink);
@@ -82,10 +34,10 @@
         font-size: 1rem;
       }
       .project a.name:hover {
-        color: var(--accent);
+        color: var(--infra);
       }
       .project .path {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.75rem;
         flex: 1;
         overflow: hidden;
@@ -93,47 +45,38 @@
         white-space: nowrap;
       }
       .project .count {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.8rem;
         white-space: nowrap;
       }
       .label-btn {
         font-size: 0.72rem;
-        color: var(--accent);
+        color: var(--infra);
         background: none;
-        border: 1px dashed var(--line);
+        border: 1px dashed var(--ink-faint);
         border-radius: 999px;
         padding: 0.1rem 0.6rem;
         cursor: pointer;
       }
       .label-btn:hover {
-        border-color: var(--accent);
+        border-color: var(--infra);
       }
       form.add {
         display: flex;
-        gap: 0.6rem;
+        gap: var(--gap);
         margin-top: 2rem;
       }
       form.add input {
         flex: 1;
-        font: inherit;
-        padding: 0.5rem 0.7rem;
-        border: 1px solid var(--line);
-        border-radius: 6px;
-        background: var(--card);
-        color: var(--ink);
       }
       form.add button {
-        font: inherit;
-        background: var(--accent);
-        color: #fff;
-        border: none;
-        border-radius: 6px;
+        background: var(--infra);
+        border-color: var(--infra);
+        color: var(--paper-raised);
         padding: 0.5rem 1rem;
-        cursor: pointer;
       }
       .empty {
-        color: var(--muted);
+        color: var(--ink-soft);
         padding: 2.5rem 0;
         text-align: center;
       }
@@ -141,19 +84,18 @@
         display: flex;
         align-items: baseline;
         gap: 0.6rem;
-        background: var(--column);
-        border-radius: 6px;
+        background: var(--paper-sunken);
+        border-radius: var(--radius);
         padding: 0.45rem 0.8rem;
         margin-bottom: 0.4rem;
         font-size: 0.9rem;
       }
       .task .where {
-        color: var(--muted);
+        color: var(--ink-soft);
         font-size: 0.78rem;
         white-space: nowrap;
       }
       .task .where a {
-        color: var(--accent);
         text-decoration: none;
       }
       .task span.text {
@@ -163,8 +105,10 @@
   </head>
   <body>
     <header>
-      <h1>draftsync</h1>
-      <span>all projects</span>
+      <h1><img class="logo" src="/assets/heron.svg" alt="" /> draftsync</h1>
+      <span class="tag">all projects</span>
+      <span style="flex: 1"></span>
+      <a href="/design">design</a>
     </header>
     <main>
       <div id="tasks-overview"></div>

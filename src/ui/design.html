@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>draftsync design</title>
+    <link rel="icon" href="/assets/heron.svg" />
+    <link rel="stylesheet" href="/assets/tokens.css" />
+    <link rel="stylesheet" href="/assets/draftsync.css" />
+    <style>
+      main {
+        max-width: 46rem;
+        margin: 0 auto;
+        padding: 1.5rem 1.5rem 4rem;
+      }
+      .zone-note {
+        color: var(--ink-soft);
+        font-size: 0.9rem;
+        margin: 0.2rem 0 1rem;
+      }
+      .swatches {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
+        gap: var(--gap);
+      }
+      .swatch {
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius);
+        overflow: hidden;
+      }
+      .swatch .color {
+        height: 3rem;
+      }
+      .swatch .name {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        padding: 0.35rem 0.5rem;
+        display: block;
+      }
+      .specimen {
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius-large);
+        padding: 1rem 1.2rem;
+        margin-bottom: var(--gap);
+        background: var(--paper-raised);
+      }
+      .specimen .label {
+        font-size: 0.7rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin-bottom: 0.5rem;
+      }
+      .marks {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        align-items: flex-end;
+      }
+      .mark {
+        text-align: center;
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+      }
+      .mark svg {
+        display: block;
+        margin: 0 auto 0.4rem;
+        background: var(--paper);
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius);
+      }
+      .mark svg .fill-ink {
+        fill: var(--ink);
+      }
+      .mark svg .fill-soft {
+        fill: var(--ink-soft);
+      }
+      .mark svg .stroke-ink {
+        stroke: var(--ink);
+      }
+      .rules li {
+        margin-bottom: 0.4rem;
+      }
+      .row-demo {
+        display: flex;
+        gap: var(--gap);
+        align-items: center;
+        flex-wrap: wrap;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">← Projects</a>
+      <h1><img class="logo" src="/assets/heron.svg" alt="" /> draftsync design</h1>
+      <span style="color: var(--ink-soft); font-size: 0.8rem">
+        the living reference — tokens.css and draftsync.css rendered honestly
+      </span>
+    </header>
+    <main>
+      <h2>The three zones</h2>
+      <p class="zone-note">
+        Color carries domain meaning: manuscript text is ink on paper, project management is
+        blue/grey infrastructure, and anything AI-related is pink/green/orange — always legible,
+        never camouflaged. No hex outside tokens.css. Full rules in <code>src/ui/DESIGN.md</code>.
+      </p>
+
+      <h2>Zone 1 — text &amp; writing</h2>
+      <div
+        class="swatches"
+        data-tokens="--paper --paper-raised --paper-sunken --ink --ink-soft --ink-faint"
+      ></div>
+      <div class="specimen" style="margin-top: 0.8rem">
+        <div class="label">Authorly specimen</div>
+        <div class="authorly" style="font-size: 1.15rem">
+          It is a truth universally acknowledged, that a single man in possession of a good fortune
+          must be in want of a wife.
+        </div>
+        <div class="excerpt-text" style="margin-top: 0.4rem">
+          Excerpts and manuscript-derived text use the authorly serif, muted ink, no color.
+        </div>
+      </div>
+
+      <h2>Zone 2 — project management</h2>
+      <div class="swatches" data-tokens="--infra --infra-soft --infra-wash --danger"></div>
+      <div class="specimen" style="margin-top: 0.8rem">
+        <div class="label">Controls</div>
+        <div class="row-demo">
+          <button class="primary">Send for review</button>
+          <button>Import chapters</button>
+          <button class="danger">Delete</button>
+          <a href="#">Drive folder ↗</a>
+          <span class="chip infra">☐ 3</span>
+        </div>
+      </div>
+
+      <h2>Zone 3 — AI</h2>
+      <div class="swatches" data-tokens="--ai-pink --ai-green --ai-orange --ai-wash"></div>
+      <div class="specimen" style="margin-top: 0.8rem">
+        <div class="label">AI markers</div>
+        <div class="row-demo">
+          <span class="chip ai">AI 2</span>
+          <span style="color: var(--ai-green); font-size: 0.85rem">✓ acknowledged, justified</span>
+          <span style="color: var(--ai-orange); font-size: 0.85rem"
+            >⚠ unacknowledged prose event</span
+          >
+        </div>
+      </div>
+
+      <h2>Brand — bird marks (candidates)</h2>
+      <p class="zone-note">
+        Direction: herons and storks — literary lineage, focused on delivery. Elegant for a literary
+        audience; friendly like good tooling. Marks are zone 1: monochrome ink, must survive 16px
+        and both themes.
+      </p>
+      <div class="marks">
+        <div class="mark">
+          <svg width="120" height="120" viewBox="0 0 100 100">
+            <polygon class="fill-ink" points="6,54 34,46 60,50 72,62 42,72" />
+            <polygon class="fill-soft" points="30,52 56,26 64,50" />
+            <polygon class="fill-ink" points="58,50 64,48 74,20 70,19" />
+            <polygon class="fill-ink" points="68,17 76,23 92,14" />
+            <path
+              class="stroke-ink"
+              d="M44 71 L44 92 M56 69 L60 92"
+              fill="none"
+              stroke-width="2.5"
+              stroke-linecap="round"
+            />
+          </svg>
+          A · origami heron (provisional)
+        </div>
+        <div class="mark">
+          <svg width="120" height="120" viewBox="0 0 100 100">
+            <path
+              class="stroke-ink"
+              fill="none"
+              stroke-width="3"
+              stroke-linecap="round"
+              d="M32 64 C28 50 42 46 52 44 C64 41 63 30 60 24 C58 19 63 15 70 15 L88 13"
+            />
+            <path
+              class="stroke-ink"
+              fill="none"
+              stroke-width="3"
+              stroke-linecap="round"
+              d="M32 64 Q46 76 62 62"
+            />
+            <path
+              class="stroke-ink"
+              fill="none"
+              stroke-width="2.5"
+              stroke-linecap="round"
+              d="M46 70 L46 92 M56 68 L60 92"
+            />
+            <circle class="fill-ink" cx="68" cy="14" r="1.8" />
+          </svg>
+          B · line heron
+        </div>
+        <div class="mark">
+          <svg width="120" height="120" viewBox="0 0 100 100">
+            <polygon class="fill-soft" points="24,42 54,20 60,42" />
+            <path
+              class="stroke-ink"
+              fill="none"
+              stroke-width="3"
+              stroke-linecap="round"
+              d="M14 58 Q40 46 66 40 L84 34"
+            />
+            <path
+              class="stroke-ink"
+              fill="none"
+              stroke-width="2"
+              stroke-linecap="round"
+              d="M80 36 Q76 48 70 54"
+            />
+            <circle class="fill-ink" cx="70" cy="59" r="5.5" />
+          </svg>
+          C · stork, delivering (sketch)
+        </div>
+        <div class="mark">
+          <div class="authorly" style="font-size: 2rem; padding: 1.6rem 1rem 1.2rem">draftsync</div>
+          wordmark · authorly serif
+        </div>
+      </div>
+
+      <h2>Type</h2>
+      <div class="specimen">
+        <div class="label">--font-ui · interface</div>
+        <div>Outline → Drafting → Revision → Beta → Done</div>
+      </div>
+      <div class="specimen">
+        <div class="label">--font-authorly · manuscript-derived text</div>
+        <div class="authorly">Four score and seven years ago our fathers brought forth…</div>
+      </div>
+      <div class="specimen">
+        <div class="label">--font-mono · identifiers, tokens, counts</div>
+        <div style="font-family: var(--font-mono); font-size: 0.85rem">
+          chapter.create · 276 words · #26
+        </div>
+      </div>
+
+      <h2>Rules</h2>
+      <ul class="rules">
+        <li>No hex outside <code>tokens.css</code>; components use tokens or inherit.</li>
+        <li>No cross-zone color borrowing — a needed exception means a design discussion.</li>
+        <li>Semantic, readable markup; no utility-class chains.</li>
+        <li>Both themes always; components never hardcode light or dark.</li>
+        <li>Wide content scrolls in its own container, never the page.</li>
+      </ul>
+    </main>
+
+    <script>
+      // Swatches render from the real computed tokens — this page cannot drift
+      for (const grid of document.querySelectorAll('.swatches')) {
+        const styles = getComputedStyle(document.documentElement);
+        for (const token of grid.dataset.tokens.split(/\s+/)) {
+          const value = styles.getPropertyValue(token).trim();
+          const cell = document.createElement('div');
+          cell.className = 'swatch';
+          cell.innerHTML = `<div class="color" style="background: var(${token})"></div><span class="name">${token}<br>${value}</span>`;
+          grid.appendChild(cell);
+        }
+      }
+    </script>
+  </body>
+</html>
