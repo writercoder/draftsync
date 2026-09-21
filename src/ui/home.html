@@ -168,6 +168,7 @@
     </header>
     <main>
       <div id="tasks-overview"></div>
+      <div id="collections"></div>
       <div id="groups"></div>
       <form class="add" id="add-form">
         <input id="add-path" placeholder="Register a project by absolute path…" required />
@@ -213,6 +214,56 @@
           }`;
           row.append(check, text, where);
           root.appendChild(row);
+        }
+      };
+
+      const loadCollections = async () => {
+        const { collections } = await api('/api/collections');
+        const root = document.getElementById('collections');
+        root.innerHTML = '';
+        const h = document.createElement('h2');
+        h.style.display = 'flex';
+        h.style.justifyContent = 'space-between';
+        const title = document.createElement('span');
+        title.textContent = 'Collections';
+        const add = document.createElement('button');
+        add.className = 'label-btn';
+        add.textContent = '+ new collection';
+        add.addEventListener('click', async () => {
+          const name = prompt('Collection name (e.g. "Short Stories Vol. 1"):');
+          if (!name || !name.trim()) return;
+          try {
+            const c = await api('/api/collections', 'POST', { name: name.trim() });
+            location.href = `/c/${c.id}`;
+          } catch (e) {
+            alert(e.message);
+          }
+        });
+        h.append(title, add);
+        root.appendChild(h);
+        for (const c of collections) {
+          const row = document.createElement('div');
+          row.className = 'project';
+          const name = document.createElement('a');
+          name.className = 'name';
+          name.href = `/c/${c.id}`;
+          name.textContent = c.name;
+          const desc = document.createElement('span');
+          desc.className = 'path';
+          desc.textContent = c.description || '';
+          const count = document.createElement('span');
+          count.className = 'count';
+          count.textContent = `${c.projectCount} stor${c.projectCount === 1 ? 'y' : 'ies'} · ${c.editionCount} edition${c.editionCount === 1 ? '' : 's'}`;
+          row.append(name, desc, count);
+          root.appendChild(row);
+        }
+        if (collections.length === 0) {
+          const hint = document.createElement('div');
+          hint.className = 'empty';
+          hint.style.padding = '0.6rem 0';
+          hint.textContent =
+            'No collections yet — a collection gathers projects (e.g. short stories) into one work.';
+          root.appendChild(hint);
         }
       };
 
@@ -264,7 +315,7 @@
 
             const count = document.createElement('span');
             count.className = 'count';
-            count.textContent = `${p.cardCount} card${p.cardCount === 1 ? '' : 's'}`;
+            count.textContent = `${p.cardCount} chapter${p.cardCount === 1 ? '' : 's'}`;
             row.appendChild(count);
 
             root.appendChild(row);
@@ -287,6 +338,7 @@
 
       load();
       loadTasks();
+      loadCollections();
     </script>
   </body>
 </html>

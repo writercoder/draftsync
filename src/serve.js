@@ -146,6 +146,60 @@ async function buildExport(project, format, options = {}) {
 }
 
 /**
+ * Build a collection (anthology) export from its member stories
+ *
+ * Each story contributes its default build file list; stories whose
+ * content can't be resolved are skipped with a warning in the result.
+ *
+ * @param {import('./store.js').Store} store - Open store
+ * @param {Object} collection - Collection row
+ * @param {string} format - 'epub', 'docx', or 'pdf'
+ * @param {Object|null} edition - Collection edition row (optional)
+ * @returns {Promise<string>} Absolute path of the built file
+ */
+async function buildCollectionExport(store, collection, format, edition = null) {
+  const projects = edition
+    ? store.listCollectionEditionProjects(edition.id)
+    : store.listCollectionProjects(collection.id);
+  const mdFiles = [];
+  for (const project of projects) {
+    try {
+      const files = await getFilesToBuild({
+        contentDir: path.join(project.path, 'content'),
+        metadataPath: path.join(project.path, 'templates', 'metadata.yaml')
+      });
+      mdFiles.push(...files);
+    } catch {
+      // story with no content/ — skipped
+    }
+  }
+  if (mdFiles.length === 0) {
+    throw new Error('no buildable stories in this collection');
+  }
+
+  const exportsDir = path.join(getDataDir(), 'exports');
+  await fs.mkdir(exportsDir, { recursive: true });
+  const outputName = edition ? `${collection.name} - ${edition.name}` : collection.name;
+  const metadataPath = path.join(exportsDir, `${outputName}.meta.yaml`);
+  await fs.writeFile(
+    metadataPath,
+    `title: ${JSON.stringify(outputName)}\n` +
+      (collection.description ? `description: ${JSON.stringify(collection.description)}\n` : ''),
+    'utf8'
+  );
+  const output = path.join(exportsDir, `${outputName}.${EXPORT_TYPES[format].ext}`);
+
+  if (format === 'docx') {
+    await convertMarkdownFilesToDocx(mdFiles, output, { metadata: metadataPath });
+  } else if (format === 'pdf') {
+    await convertMarkdownFilesToPdf(mdFiles, output, { metadata: metadataPath });
+  } else {
+    await convertMarkdownToEpub(mdFiles, output, { metadata: metadataPath, tocDepth: 3 });
+  }
+  return output;
+}
+
+/**
  * Does a directory look like a draftsync project?
  *
  * @param {string} dir - Directory to check
@@ -187,10 +241,103 @@ export function createDraftsyncServer({ store }) {
       // Pages
       if (req.method === 'GET' && url.pathname === '/') return sendPage('home.html');
       if (req.method === 'GET' && /^\/p\/\d+$/.test(url.pathname)) return sendPage('kanban.html');
+      if (req.method === 'GET' && /^\/c\/\d+$/.test(url.pathname))
+        return sendPage('collection.html');
 
       // Global open-tasks overview
       if (req.method === 'GET' && url.pathname === '/api/tasks') {
         return send(200, { tasks: store.listAllOpenTasks() });
+      }
+
+      // Collections
+      if (req.method === 'GET' && url.pathname === '/api/collections') {
+        return send(200, { collections: store.listCollections() });
+      }
+      if (req.method === 'POST' && url.pathname === '/api/collections') {
+        return send(201, store.createCollection(await readBody(req)));
+      }
+      const colMatch = url.pathname.match(/^\/api\/collections\/(\d+)(\/.*)?$/);
+      if (colMatch) {
+        const collection = store.getCollection(Number(colMatch[1]));
+        if (!collection) return send(404, { error: 'collection not found' });
+        const sub = colMatch[2] || '';
+
+        if (sub === '' && req.method === 'GET') {
+          return send(200, {
+            collection,
+            projects: store.listCollectionProjects(collection.id),
+            editions: store.listCollectionEditions(collection.id),
+            allProjects: store.listProjects()
+          });
+        }
+        if (sub === '' && req.method === 'PATCH') {
+          return send(200, store.updateCollection(collection.id, await readBody(req)));
+        }
+        if (sub === '' && req.method === 'DELETE') {
+          store.deleteCollection(collection.id);
+          return send(200, { deleted: true });
+        }
+        if (sub === '/projects' && req.method === 'PUT') {
+          const body = await readBody(req);
+          if (!Array.isArray(body.project_ids)) {
+            return send(400, { error: 'project_ids (array) is required' });
+          }
+          return send(200, {
+            projects: store.setCollectionProjects(collection.id, body.project_ids)
+          });
+        }
+        if (sub === '/editions' && req.method === 'POST') {
+          return send(201, store.createCollectionEdition(collection.id, await readBody(req)));
+        }
+        const colEd = sub.match(/^\/editions\/(\d+)(\/projects)?$/);
+        if (colEd) {
+          const edition = store.getCollectionEdition(Number(colEd[1]));
+          if (!edition || edition.collection_id !== collection.id) {
+            return send(404, { error: 'edition not found' });
+          }
+          if (colEd[2] && req.method === 'PUT') {
+            const body = await readBody(req);
+            if (!Array.isArray(body.project_ids)) {
+              return send(400, { error: 'project_ids (array) is required' });
+            }
+            return send(200, {
+              projects: store.setCollectionEditionProjects(edition.id, body.project_ids)
+            });
+          }
+          if (!colEd[2] && req.method === 'GET') {
+            return send(200, {
+              edition,
+              projects: store.listCollectionEditionProjects(edition.id)
+            });
+          }
+          if (!colEd[2] && req.method === 'DELETE') {
+            store.deleteCollectionEdition(edition.id);
+            return send(200, { deleted: true });
+          }
+        }
+        const colExport = sub.match(/^\/export\/(epub|docx|pdf)$/);
+        if (colExport && req.method === 'GET') {
+          try {
+            let edition = null;
+            const editionId = url.searchParams.get('edition');
+            if (editionId) {
+              edition = store.getCollectionEdition(Number(editionId));
+              if (!edition || edition.collection_id !== collection.id) {
+                return send(404, { error: 'edition not found' });
+              }
+            }
+            const filePath = await buildCollectionExport(store, collection, colExport[1], edition);
+            const data = await fs.readFile(filePath);
+            res.writeHead(200, {
+              'Content-Type': EXPORT_TYPES[colExport[1]].mime,
+              'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`
+            });
+            return res.end(data);
+          } catch (error) {
+            return send(500, { error: error.message });
+          }
+        }
+        return send(404, { error: 'not found' });
       }
 
       // Project registry

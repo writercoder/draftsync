@@ -222,12 +222,13 @@ new projects can also be registered from the home page by path.
 
 On a project board:
 
-- Cards can be added by hand or seeded from `content/*.md` via "Import
-  chapters" (drafts/notes excluded, matching the build filters)
-- Each card holds a **task checklist** (editor notes, review feedback);
-  open counts show on cards and roll up to the home overview
-- Cards whose file has been pushed link to their Google Doc; the header
-  links to the project's Drive folder
+- Chapters can be added by hand or seeded from `content/*.md` via
+  "Import chapters" (drafts/notes excluded, matching the build filters)
+- Each chapter holds a **task checklist** (editor notes, review
+  feedback); open counts show on chapters and roll up to the home
+  overview
+- Chapters whose file has been pushed link to their Google Doc; the
+  header links to the project's Drive folder
 - Download buttons build the manuscript on demand as EPUB, DOCX, or PDF
   (PDF needs a Pandoc PDF engine such as BasicTeX)
 - The **Metadata** button edits the project's `templates/metadata.yaml`
@@ -236,6 +237,16 @@ On a project board:
   of chapters — a chapter can belong to any number of editions, each
   with its own order. Editions get their own download buttons, and the
   CLI builds them too: `draftsync build:epub --edition "Reader's Edition"`
+
+### Collections
+
+A **collection** aggregates projects into one work — think short
+stories: each story is its own project, and a collection (e.g. "Short
+Stories Vol. 1") gathers them in order. Collections live on the home
+page, have their own page (`/c/:id`) for ordering member stories, and
+support **editions** of their own — an ordered selection of member
+stories — with anthology downloads (EPUB/DOCX/PDF) built from every
+story's chapters, titled after the collection.
 
 ### AI Auditability
 

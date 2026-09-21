@@ -585,7 +585,7 @@
 
           const add = document.createElement('button');
           add.className = 'add';
-          add.textContent = '+ Add card';
+          add.textContent = '+ Add chapter';
           add.addEventListener('click', () => addCard(list, stage.key, add));
           col.appendChild(add);
 
@@ -595,7 +595,7 @@
           const hint = document.createElement('div');
           hint.className = 'empty';
           hint.textContent =
-            'No cards yet — add one, or use "Import chapters" to seed the board from content/.';
+            'No chapters yet — add one, or use "Import chapters" to seed the board from content/.';
           root.appendChild(hint);
         }
       };
@@ -622,7 +622,7 @@
         if (list.querySelector('.add-input')) return;
         const input = document.createElement('input');
         input.className = 'add-input';
-        input.placeholder = 'Card title…';
+        input.placeholder = 'Chapter title…';
         const done = async commit => {
           const title = input.value.trim();
           input.remove();
@@ -718,7 +718,7 @@
         .getElementById('edit-cancel')
         .addEventListener('click', () => document.getElementById('editor').close());
       document.getElementById('edit-delete').addEventListener('click', async () => {
-        if (!confirm('Delete this card?')) return;
+        if (!confirm('Delete this chapter?')) return;
         await api(`${base}/cards/${editing.id}`, 'DELETE');
         document.getElementById('editor').close();
         load();

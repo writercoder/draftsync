@@ -227,6 +227,61 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('collections', () => {
+    it('should manage collections, membership, editions, and anthology export', async () => {
+      // A second story project
+      const storyDir = join(tempDir, 'story-two');
+      mkdirSync(join(storyDir, 'content'), { recursive: true });
+      writeFileSync(join(storyDir, 'content', '01-story.md'), '# Story Two\n\nOnce more.\n');
+      const other = await api('/api/projects', 'POST', { path: storyDir });
+
+      const col = await api('/api/collections', 'POST', {
+        name: 'Vol. 1',
+        description: 'Two tales'
+      });
+      expect(col.status).toBe(201);
+      expect((await api('/api/collections', 'POST', { name: 'Vol. 1' })).status).toBe(400);
+
+      const set = await api(`/api/collections/${col.body.id}/projects`, 'PUT', {
+        project_ids: [other.body.id, project.id]
+      });
+      expect(set.body.projects.map(x => x.name)).toEqual(['story-two', 'my-novel']);
+
+      const detail = await api(`/api/collections/${col.body.id}`);
+      expect(detail.body.projects).toHaveLength(2);
+      expect(detail.body.allProjects.length).toBeGreaterThanOrEqual(2);
+
+      // Anthology export concatenates member stories in order
+      const res = await fetch(`${base}/api/collections/${col.body.id}/export/docx`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-disposition')).toContain('Vol. 1.docx');
+
+      // Edition scoped to a subset
+      const ed = await api(`/api/collections/${col.body.id}/editions`, 'POST', {
+        name: 'Sampler'
+      });
+      await api(`/api/collections/${col.body.id}/editions/${ed.body.id}/projects`, 'PUT', {
+        project_ids: [other.body.id]
+      });
+      const edRes = await fetch(
+        `${base}/api/collections/${col.body.id}/export/epub?edition=${ed.body.id}`
+      );
+      expect(edRes.status).toBe(200);
+      expect(edRes.headers.get('content-disposition')).toContain('Vol. 1 - Sampler');
+
+      const gone = await api(`/api/collections/${col.body.id}`, 'DELETE');
+      expect(gone.body.deleted).toBe(true);
+      expect((await api(`/api/collections/${col.body.id}`)).status).toBe(404);
+    });
+
+    it('should serve the collection page', async () => {
+      const col = await api('/api/collections', 'POST', { name: 'Page Test' });
+      const page = await fetch(`${base}/c/${col.body.id}`);
+      expect(page.status).toBe(200);
+      expect(await page.text()).toContain('draftsync collection');
+    });
+  });
+
   describe('metadata', () => {
     it('should round-trip metadata.yaml through the API', async () => {
       const before = await api(`${p}/metadata`);

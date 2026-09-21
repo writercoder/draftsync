@@ -161,6 +161,46 @@ describe('Store Unit Tests', () => {
     });
   });
 
+  describe('collections', () => {
+    it('should aggregate projects with ordered membership', () => {
+      const s1 = store.getOrCreateProject('/home/me/story-one');
+      const s2 = store.getOrCreateProject('/home/me/story-two');
+      const col = store.createCollection({ name: 'Short Stories Vol. 1' });
+      expect(() => store.createCollection({ name: 'Short Stories Vol. 1' })).toThrow(/exists/);
+
+      store.setCollectionProjects(col.id, [s2.id, s1.id]);
+      expect(store.listCollectionProjects(col.id).map(x => x.name)).toEqual([
+        'story-two',
+        'story-one'
+      ]);
+      expect(store.listCollections()[0].projectCount).toBe(2);
+    });
+
+    it('should scope collection editions to member projects', () => {
+      const s1 = store.getOrCreateProject('/home/me/story-one');
+      const outsider = store.getOrCreateProject('/home/me/not-a-member');
+      const col = store.createCollection({ name: 'Vol. 1' });
+      store.setCollectionProjects(col.id, [s1.id]);
+
+      const ed = store.createCollectionEdition(col.id, { name: 'Sampler' });
+      store.setCollectionEditionProjects(ed.id, [s1.id]);
+      expect(store.listCollectionEditionProjects(ed.id).map(x => x.name)).toEqual(['story-one']);
+      expect(() => store.setCollectionEditionProjects(ed.id, [outsider.id])).toThrow(
+        /not in this collection/
+      );
+    });
+
+    it('should cascade editions and membership on collection delete', () => {
+      const s1 = store.getOrCreateProject('/home/me/story-one');
+      const col = store.createCollection({ name: 'Vol. 1' });
+      store.setCollectionProjects(col.id, [s1.id]);
+      const ed = store.createCollectionEdition(col.id, { name: 'Sampler' });
+
+      expect(store.deleteCollection(col.id)).toBe(true);
+      expect(store.getCollectionEdition(ed.id)).toBeUndefined();
+    });
+  });
+
   it('should expose five stages in board order', () => {
     expect(STAGES.map(s => s.key)).toEqual(['outline', 'drafting', 'revision', 'beta', 'done']);
   });

@@ -104,6 +104,32 @@ export function openStore(dataDir = getDataDir()) {
       position INTEGER NOT NULL DEFAULT 0,
       PRIMARY KEY (edition_id, card_id)
     );
+    CREATE TABLE IF NOT EXISTS collections (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL UNIQUE,
+      description TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS collection_projects (
+      collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (collection_id, project_id)
+    );
+    CREATE TABLE IF NOT EXISTS collection_editions (
+      id INTEGER PRIMARY KEY,
+      collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(collection_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS collection_edition_projects (
+      edition_id INTEGER NOT NULL REFERENCES collection_editions(id) ON DELETE CASCADE,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (edition_id, project_id)
+    );
   `);
   // Migrations for columns added after the initial schema
   const projectCols = db
@@ -646,6 +672,224 @@ export class Store {
     });
     replace();
     return this.listEditionChapters(editionId);
+  }
+
+  /**
+   * List all collections with member/edition counts
+   *
+   * @returns {Array<Object>} Collection rows with projectCount, editionCount
+   */
+  listCollections() {
+    return this.db
+      .prepare(
+        `SELECT col.*,
+           (SELECT COUNT(*) FROM collection_projects cp WHERE cp.collection_id = col.id) AS projectCount,
+           (SELECT COUNT(*) FROM collection_editions ce WHERE ce.collection_id = col.id) AS editionCount
+         FROM collections col ORDER BY col.name`
+      )
+      .all();
+  }
+
+  /**
+   * Get one collection by ID
+   *
+   * @param {number} id - Collection ID
+   * @returns {Object|undefined} Collection row
+   */
+  getCollection(id) {
+    return this.db.prepare('SELECT * FROM collections WHERE id = ?').get(id);
+  }
+
+  /**
+   * Create a collection
+   *
+   * @param {Object} fields - {name, description}
+   * @returns {Object} The created collection
+   */
+  createCollection({ name, description = '' }) {
+    if (!name || !name.trim()) throw new Error('name is required');
+    const existing = this.db.prepare('SELECT id FROM collections WHERE name = ?').get(name.trim());
+    if (existing) throw new Error(`collection "${name.trim()}" already exists`);
+    const { lastInsertRowid } = this.db
+      .prepare('INSERT INTO collections (name, description) VALUES (?, ?)')
+      .run(name.trim(), description);
+    return this.getCollection(lastInsertRowid);
+  }
+
+  /**
+   * Update a collection's name/description
+   *
+   * @param {number} id - Collection ID
+   * @param {Object} fields - Any of name, description
+   * @returns {Object|undefined} Updated collection
+   */
+  updateCollection(id, fields) {
+    const allowed = ['name', 'description'];
+    const updates = allowed.filter(k => fields[k] !== undefined);
+    if (updates.length > 0) {
+      const set = updates.map(k => `${k} = ?`).join(', ');
+      this.db
+        .prepare(`UPDATE collections SET ${set} WHERE id = ?`)
+        .run(...updates.map(k => fields[k]), id);
+    }
+    return this.getCollection(id);
+  }
+
+  /**
+   * Delete a collection (membership and editions cascade)
+   *
+   * @param {number} id - Collection ID
+   * @returns {boolean} True if deleted
+   */
+  deleteCollection(id) {
+    return this.db.prepare('DELETE FROM collections WHERE id = ?').run(id).changes > 0;
+  }
+
+  /**
+   * The ordered member projects of a collection
+   *
+   * @param {number} collectionId - Collection ID
+   * @returns {Array<Object>} Project rows in collection order
+   */
+  listCollectionProjects(collectionId) {
+    return this.db
+      .prepare(
+        `SELECT p.*, cp.position AS collectionPosition
+         FROM collection_projects cp JOIN projects p ON p.id = cp.project_id
+         WHERE cp.collection_id = ?
+         ORDER BY cp.position`
+      )
+      .all(collectionId);
+  }
+
+  /**
+   * Replace a collection's ordered project membership
+   *
+   * @param {number} collectionId - Collection ID
+   * @param {Array<number>} projectIds - Project IDs in the desired order
+   * @returns {Array<Object>} The new ordered member projects
+   */
+  setCollectionProjects(collectionId, projectIds) {
+    if (!this.getCollection(collectionId)) throw new Error('collection not found');
+    const replace = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM collection_projects WHERE collection_id = ?').run(collectionId);
+      const insert = this.db.prepare(
+        'INSERT INTO collection_projects (collection_id, project_id, position) VALUES (?, ?, ?)'
+      );
+      projectIds.forEach((projectId, position) => {
+        if (!this.getProject(projectId)) throw new Error(`unknown project ${projectId}`);
+        insert.run(collectionId, projectId, position);
+      });
+    });
+    replace();
+    return this.listCollectionProjects(collectionId);
+  }
+
+  /**
+   * List a collection's editions with story counts
+   *
+   * @param {number} collectionId - Collection ID
+   * @returns {Array<Object>} Edition rows with projectCount
+   */
+  listCollectionEditions(collectionId) {
+    return this.db
+      .prepare(
+        `SELECT ce.*, COUNT(cep.project_id) AS projectCount
+         FROM collection_editions ce
+         LEFT JOIN collection_edition_projects cep ON cep.edition_id = ce.id
+         WHERE ce.collection_id = ?
+         GROUP BY ce.id ORDER BY ce.name`
+      )
+      .all(collectionId);
+  }
+
+  /**
+   * Get one collection edition by ID
+   *
+   * @param {number} id - Collection edition ID
+   * @returns {Object|undefined} Edition row
+   */
+  getCollectionEdition(id) {
+    return this.db.prepare('SELECT * FROM collection_editions WHERE id = ?').get(id);
+  }
+
+  /**
+   * Create a collection edition
+   *
+   * @param {number} collectionId - Collection ID
+   * @param {Object} fields - {name, description}
+   * @returns {Object} The created edition
+   */
+  createCollectionEdition(collectionId, { name, description = '' }) {
+    if (!name || !name.trim()) throw new Error('name is required');
+    const existing = this.db
+      .prepare('SELECT id FROM collection_editions WHERE collection_id = ? AND name = ?')
+      .get(collectionId, name.trim());
+    if (existing) throw new Error(`edition "${name.trim()}" already exists`);
+    const { lastInsertRowid } = this.db
+      .prepare(
+        'INSERT INTO collection_editions (collection_id, name, description) VALUES (?, ?, ?)'
+      )
+      .run(collectionId, name.trim(), description);
+    return this.getCollectionEdition(lastInsertRowid);
+  }
+
+  /**
+   * Delete a collection edition
+   *
+   * @param {number} id - Collection edition ID
+   * @returns {boolean} True if deleted
+   */
+  deleteCollectionEdition(id) {
+    return this.db.prepare('DELETE FROM collection_editions WHERE id = ?').run(id).changes > 0;
+  }
+
+  /**
+   * The ordered stories (projects) of a collection edition
+   *
+   * @param {number} editionId - Collection edition ID
+   * @returns {Array<Object>} Project rows in edition order
+   */
+  listCollectionEditionProjects(editionId) {
+    return this.db
+      .prepare(
+        `SELECT p.*, cep.position AS editionPosition
+         FROM collection_edition_projects cep JOIN projects p ON p.id = cep.project_id
+         WHERE cep.edition_id = ?
+         ORDER BY cep.position`
+      )
+      .all(editionId);
+  }
+
+  /**
+   * Replace a collection edition's ordered story membership
+   *
+   * Only projects that are members of the parent collection are allowed.
+   *
+   * @param {number} editionId - Collection edition ID
+   * @param {Array<number>} projectIds - Project IDs in the desired order
+   * @returns {Array<Object>} The new ordered stories
+   */
+  setCollectionEditionProjects(editionId, projectIds) {
+    const edition = this.getCollectionEdition(editionId);
+    if (!edition) throw new Error('edition not found');
+    const members = new Set(this.listCollectionProjects(edition.collection_id).map(prj => prj.id));
+    const replace = this.db.transaction(() => {
+      this.db
+        .prepare('DELETE FROM collection_edition_projects WHERE edition_id = ?')
+        .run(editionId);
+      const insert = this.db.prepare(
+        'INSERT INTO collection_edition_projects (edition_id, project_id, position) VALUES (?, ?, ?)'
+      );
+      projectIds.forEach((projectId, position) => {
+        if (!members.has(projectId)) {
+          throw new Error(`project ${projectId} is not in this collection`);
+        }
+        insert.run(editionId, projectId, position);
+      });
+    });
+    replace();
+    return this.listCollectionEditionProjects(editionId);
   }
 
   /** Close the database */

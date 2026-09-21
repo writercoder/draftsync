@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>draftsync collection</title>
+    <style>
+      :root {
+        --ground: #fbfaf7;
+        --card: #ffffff;
+        --column: #f0eee7;
+        --ink: #232830;
+        --muted: #6b7480;
+        --accent: #2f5a8f;
+        --line: #e0ddd4;
+        --danger: #b5342e;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ground: #14171c;
+          --card: #232a33;
+          --column: #1b2027;
+          --ink: #e9e6df;
+          --muted: #99a1ab;
+          --accent: #7fa8d9;
+          --line: #2a3038;
+          --danger: #e06054;
+        }
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--ground);
+        color: var(--ink);
+        font:
+          15px/1.5 -apple-system,
+          'Segoe UI',
+          system-ui,
+          sans-serif;
+      }
+      header {
+        display: flex;
+        align-items: baseline;
+        gap: 0.75rem;
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--line);
+      }
+      header h1 {
+        font-size: 1.1rem;
+        margin: 0;
+      }
+      header a {
+        color: var(--accent);
+        font-size: 0.82rem;
+        text-decoration: none;
+      }
+      header .desc {
+        color: var(--muted);
+        font-size: 0.85rem;
+        flex: 1;
+      }
+      main {
+        max-width: 44rem;
+        margin: 0 auto;
+        padding: 1.5rem;
+      }
+      h2 {
+        font-size: 0.75rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 1.6rem 0 0.5rem;
+      }
+      .row {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.45rem 0.8rem;
+        margin-bottom: 0.4rem;
+      }
+      .row.muted {
+        background: var(--column);
+        border-style: dashed;
+      }
+      .row span.t {
+        flex: 1;
+      }
+      .row.muted span.t {
+        color: var(--muted);
+      }
+      .row a {
+        color: var(--accent);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      button {
+        font: inherit;
+        color: var(--ink);
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 0.15rem 0.55rem;
+        font-size: 0.78rem;
+        cursor: pointer;
+      }
+      button:hover {
+        border-color: var(--accent);
+      }
+      button.danger {
+        color: var(--danger);
+      }
+      .downloads {
+        display: flex;
+        gap: 0.6rem;
+        font-size: 0.85rem;
+        align-items: baseline;
+      }
+      .downloads a {
+        color: var(--accent);
+      }
+      .edition {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 0.8rem 1rem;
+        margin-bottom: 0.8rem;
+        background: var(--card);
+      }
+      .edition .head {
+        display: flex;
+        gap: 0.6rem;
+        align-items: baseline;
+        margin-bottom: 0.4rem;
+      }
+      .edition .head strong {
+        flex: 1;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="/">← Projects</a>
+      <h1 id="col-name">collection</h1>
+      <span class="desc" id="col-desc"></span>
+      <span class="downloads">
+        <span style="color: var(--muted)">Download all:</span>
+        <a id="dl-epub" download>EPUB</a>
+        <a id="dl-docx" download>DOCX</a>
+        <a id="dl-pdf" download>PDF</a>
+      </span>
+    </header>
+    <main>
+      <h2>Stories, in order</h2>
+      <div id="members"></div>
+      <h2>Add a project</h2>
+      <div id="available"></div>
+      <h2 style="display: flex; justify-content: space-between">
+        <span>Editions</span>
+        <button id="ed-new" style="text-transform: none; letter-spacing: 0">New edition</button>
+      </h2>
+      <div id="editions"></div>
+    </main>
+
+    <script>
+      const collectionId = Number(location.pathname.split('/')[2]);
+      const base = `/api/collections/${collectionId}`;
+      let state = null;
+
+      const api = async (path, method = 'GET', body) => {
+        const res = await fetch(path, {
+          method,
+          headers: body ? { 'Content-Type': 'application/json' } : {},
+          body: body ? JSON.stringify(body) : undefined
+        });
+        if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+        return res.json();
+      };
+
+      const load = async () => {
+        state = await api(base);
+        document.getElementById('col-name').textContent = state.collection.name;
+        document.getElementById('col-desc').textContent = state.collection.description;
+        document.title = state.collection.name + ' · draftsync collection';
+        for (const fmt of ['epub', 'docx', 'pdf']) {
+          document.getElementById(`dl-${fmt}`).href = `${base}/export/${fmt}`;
+        }
+        renderMembers();
+        renderEditions();
+      };
+
+      const setMembers = async ids => {
+        await api(`${base}/projects`, 'PUT', { project_ids: ids });
+        load();
+      };
+
+      const renderMembers = () => {
+        const ids = state.projects.map(prj => prj.id);
+        const root = document.getElementById('members');
+        root.innerHTML = '';
+        state.projects.forEach((prj, i) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          const up = document.createElement('button');
+          up.textContent = '▲';
+          up.disabled = i === 0;
+          up.addEventListener('click', () => {
+            const next = [...ids];
+            [next[i - 1], next[i]] = [next[i], next[i - 1]];
+            setMembers(next);
+          });
+          const down = document.createElement('button');
+          down.textContent = '▼';
+          down.disabled = i === ids.length - 1;
+          down.addEventListener('click', () => {
+            const next = [...ids];
+            [next[i], next[i + 1]] = [next[i + 1], next[i]];
+            setMembers(next);
+          });
+          const t = document.createElement('span');
+          t.className = 't';
+          t.innerHTML = `${i + 1}. <a href="/p/${prj.id}">${prj.name}</a>`;
+          const rm = document.createElement('button');
+          rm.textContent = '×';
+          rm.addEventListener('click', () => setMembers(ids.filter(x => x !== prj.id)));
+          row.append(up, down, t, rm);
+          root.appendChild(row);
+        });
+        if (state.projects.length === 0) {
+          root.innerHTML =
+            '<div class="row muted"><span class="t">Empty — add projects below</span></div>';
+        }
+
+        const avail = document.getElementById('available');
+        avail.innerHTML = '';
+        for (const prj of state.allProjects.filter(x => !ids.includes(x.id))) {
+          const row = document.createElement('div');
+          row.className = 'row muted';
+          const add = document.createElement('button');
+          add.textContent = '+';
+          add.addEventListener('click', () => setMembers([...ids, prj.id]));
+          const t = document.createElement('span');
+          t.className = 't';
+          t.textContent = prj.name + (prj.label ? ` (${prj.label})` : '');
+          row.append(add, t);
+          avail.appendChild(row);
+        }
+      };
+
+      const renderEditions = async () => {
+        const root = document.getElementById('editions');
+        root.innerHTML = '';
+        for (const ed of state.editions) {
+          const { projects } = await api(`${base}/editions/${ed.id}`);
+          const ids = projects.map(prj => prj.id);
+          const setEd = async next => {
+            await api(`${base}/editions/${ed.id}/projects`, 'PUT', { project_ids: next });
+            load();
+          };
+          const box = document.createElement('div');
+          box.className = 'edition';
+          const head = document.createElement('div');
+          head.className = 'head';
+          head.innerHTML =
+            `<strong>${ed.name}</strong>` +
+            `<span class="downloads"><a href="${base}/export/epub?edition=${ed.id}" download>EPUB</a>` +
+            `<a href="${base}/export/docx?edition=${ed.id}" download>DOCX</a>` +
+            `<a href="${base}/export/pdf?edition=${ed.id}" download>PDF</a></span>`;
+          const del = document.createElement('button');
+          del.className = 'danger';
+          del.textContent = 'Delete';
+          del.addEventListener('click', async () => {
+            if (!confirm(`Delete edition "${ed.name}"?`)) return;
+            await api(`${base}/editions/${ed.id}`, 'DELETE');
+            load();
+          });
+          head.appendChild(del);
+          box.appendChild(head);
+
+          projects.forEach((prj, i) => {
+            const row = document.createElement('div');
+            row.className = 'row';
+            const up = document.createElement('button');
+            up.textContent = '▲';
+            up.disabled = i === 0;
+            up.addEventListener('click', () => {
+              const next = [...ids];
+              [next[i - 1], next[i]] = [next[i], next[i - 1]];
+              setEd(next);
+            });
+            const down = document.createElement('button');
+            down.textContent = '▼';
+            down.disabled = i === ids.length - 1;
+            down.addEventListener('click', () => {
+              const next = [...ids];
+              [next[i], next[i + 1]] = [next[i + 1], next[i]];
+              setEd(next);
+            });
+            const t = document.createElement('span');
+            t.className = 't';
+            t.textContent = `${i + 1}. ${prj.name}`;
+            const rm = document.createElement('button');
+            rm.textContent = '×';
+            rm.addEventListener('click', () => setEd(ids.filter(x => x !== prj.id)));
+            row.append(up, down, t, rm);
+            box.appendChild(row);
+          });
+          for (const prj of state.projects.filter(x => !ids.includes(x.id))) {
+            const row = document.createElement('div');
+            row.className = 'row muted';
+            const add = document.createElement('button');
+            add.textContent = '+';
+            add.addEventListener('click', () => setEd([...ids, prj.id]));
+            const t = document.createElement('span');
+            t.className = 't';
+            t.textContent = prj.name;
+            row.append(add, t);
+            box.appendChild(row);
+          }
+          root.appendChild(box);
+        }
+        if (state.editions.length === 0) {
+          root.innerHTML =
+            '<div class="row muted"><span class="t">No editions — an edition selects and orders stories for an anthology build</span></div>';
+        }
+      };
+
+      document.getElementById('ed-new').addEventListener('click', async () => {
+        const name = prompt('Edition name:');
+        if (!name || !name.trim()) return;
+        try {
+          await api(`${base}/editions`, 'POST', { name: name.trim() });
+          load();
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+
+      load();
+    </script>
+  </body>
+</html>
