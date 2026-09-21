@@ -137,16 +137,26 @@
         font-variant-numeric: tabular-nums;
         font-family: var(--font-mono);
       }
-      .st-item .kind {
-        font-size: 0.65rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+      .st-item .ic {
         color: var(--infra);
-        white-space: nowrap;
+        align-self: center;
       }
-      .st-item .kind.ai {
+      .st-item .ic.ai {
         color: var(--ai-pink);
+      }
+      .st-item strong {
+        font-weight: 600;
+      }
+      .st-item .delta {
+        color: var(--ink-soft);
+        font-variant-numeric: tabular-nums;
+      }
+      .st-day {
+        font-size: 0.66rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin: 0.8rem 0 0.1rem;
       }
       .st-item .what {
         flex: 1;
@@ -424,32 +434,61 @@
         <button>Actions ▾</button>
         <div class="menu-list">
           <button class="menu-item with-count" id="am-tasks-head">
-            <span>Tasks</span><span class="count" id="am-tasks-count"></span>
+            <span
+              ><svg class="ic"><use href="/assets/icons.svg#square" /></svg> Tasks</span
+            ><span class="count" id="am-tasks-count"></span>
           </button>
-          <button class="menu-item" id="am-create-task">Create task</button>
+          <button class="menu-item" id="am-create-task">
+            <svg class="ic"><use href="/assets/icons.svg#square" /></svg> Create task
+          </button>
           <div class="menu-sep"></div>
           <button class="menu-item with-count" id="am-reviews-head">
-            <span>Reviews</span><span class="count" id="am-reviews-count"></span>
+            <span
+              ><svg class="ic"><use href="/assets/icons.svg#plane" /></svg> Reviews</span
+            ><span class="count" id="am-reviews-count"></span>
           </button>
-          <button class="menu-item" id="am-send">Send for review</button>
-          <button class="menu-item" id="am-record">Record review</button>
+          <button class="menu-item" id="am-send">
+            <svg class="ic"><use href="/assets/icons.svg#plane" /></svg> Send for review
+          </button>
+          <button class="menu-item" id="am-record">
+            <svg class="ic"><use href="/assets/icons.svg#inbox" /></svg> Record review
+          </button>
           <div class="menu-sep"></div>
           <button class="menu-item with-count" id="am-editions-head">
-            <span>Editions</span><span class="count" id="am-editions-count"></span>
+            <span
+              ><svg class="ic"><use href="/assets/icons.svg#layers" /></svg> Editions</span
+            ><span class="count" id="am-editions-count"></span>
           </button>
-          <button class="menu-item" id="am-new-edition">New edition</button>
+          <button class="menu-item" id="am-new-edition">
+            <svg class="ic"><use href="/assets/icons.svg#layers" /></svg> New edition
+          </button>
           <div class="menu-sep"></div>
           <div class="menu-head"><span>Project settings</span></div>
-          <button class="menu-item" id="am-metadata">Metadata</button>
-          <button class="menu-item" id="am-import">Import chapters</button>
-          <button class="menu-item" id="am-ai">Log AI usage</button>
+          <button class="menu-item" id="am-metadata">
+            <svg class="ic"><use href="/assets/icons.svg#sliders" /></svg> Metadata
+          </button>
+          <button class="menu-item" id="am-import">
+            <svg class="ic"><use href="/assets/icons.svg#import" /></svg> Import chapters
+          </button>
+          <button class="menu-item" id="am-ai" style="color: inherit">
+            <svg class="ic" style="color: var(--ai-pink)">
+              <use href="/assets/icons.svg#sparkle" />
+            </svg>
+            Log AI usage
+          </button>
           <a class="menu-item" id="am-drive" target="_blank" style="display: none"
             >Drive folder ↗</a
           >
         </div>
       </div>
-      <button id="tasks-toggle">☐ Tasks</button>
-      <button id="panel-toggle">◨ Activity</button>
+      <button id="tasks-toggle">
+        <svg class="ic"><use href="/assets/icons.svg#square" /></svg>
+        <span id="tasks-toggle-label">Tasks</span>
+      </button>
+      <button id="panel-toggle">
+        <svg class="ic"><use href="/assets/icons.svg#pulse" /></svg>
+        Activity
+      </button>
     </header>
     <div class="layout">
       <div class="board" id="board"></div>
@@ -1232,8 +1271,8 @@
         const openTasks = tasks.filter(t => !t.done).length;
         document.getElementById('am-tasks-count').textContent =
           openTasks > 0 ? `${openTasks} open` : `${tasks.length}`;
-        document.getElementById('tasks-toggle').textContent =
-          openTasks > 0 ? `☐ Tasks (${openTasks})` : '☐ Tasks';
+        document.getElementById('tasks-toggle-label').textContent =
+          openTasks > 0 ? `Tasks (${openTasks})` : 'Tasks';
       };
 
       document
@@ -1271,18 +1310,95 @@
       let panelCat = 'all';
       let streamRows = [];
 
-      const describeStreamRow = row => {
-        if (row.kind !== 'ai_event') {
-          return describeActivity({
-            type: row.kind,
-            data: row.data,
-            chapterTitle: row.chapterTitle
-          });
+      const KIND_ICON = {
+        file_edited: 'edit',
+        chapter_created: 'doc-plus',
+        edition_created: 'layers',
+        review_sent: 'plane',
+        review_received: 'inbox',
+        task_created: 'square',
+        task_completed: 'square-check',
+        ai_event: 'sparkle'
+      };
+
+      const strong = text => {
+        const el = document.createElement('strong');
+        el.textContent = text;
+        return el;
+      };
+      const muted = text => {
+        const el = document.createElement('span');
+        el.className = 'delta';
+        el.textContent = text;
+        return el;
+      };
+
+      // Object-first phrasing per kind; returns DOM nodes (no innerHTML)
+      const streamNodes = row => {
+        const d = row.data || {};
+        const out = [];
+        switch (row.kind) {
+          case 'file_edited':
+            out.push(strong(row.chapterTitle || d.file), document.createTextNode(' edited '));
+            out.push(muted(`+${d.linesAdded} −${d.linesRemoved} · ${d.wordCount} words`));
+            break;
+          case 'chapter_created':
+            out.push(strong(d.title), document.createTextNode(d.imported ? ' imported' : ' added'));
+            break;
+          case 'edition_created':
+            out.push(
+              document.createTextNode('edition '),
+              strong(d.name),
+              document.createTextNode(' created')
+            );
+            break;
+          case 'review_sent':
+            out.push(document.createTextNode('to '), strong(d.reviewer));
+            if (row.chapterTitle) out.push(document.createTextNode(` — ${row.chapterTitle}`));
+            break;
+          case 'review_received':
+            out.push(document.createTextNode('from '), strong(d.reviewer));
+            if (row.chapterTitle) out.push(document.createTextNode(` — ${row.chapterTitle}`));
+            if (d.hasFile) out.push(muted(' (file)'));
+            break;
+          case 'task_created':
+          case 'task_completed':
+            out.push(document.createTextNode(d.text));
+            if (row.chapterTitle)
+              out.push(document.createTextNode(' — '), strong(row.chapterTitle));
+            break;
+          case 'ai_event': {
+            out.push(document.createTextNode(`${d.purpose} — ${d.provider} (${d.source})`));
+            if (row.chapterTitle)
+              out.push(document.createTextNode(' · '), strong(row.chapterTitle));
+            const mark = document.createElement('span');
+            if (d.purpose === 'prose-suggestion' && !d.justification) {
+              mark.className = 'warn';
+              mark.textContent = ' ⚠';
+            } else if (d.justification) {
+              mark.className = 'ok';
+              mark.textContent = ' ✓';
+            }
+            out.push(mark);
+            break;
+          }
+          default:
+            out.push(document.createTextNode(JSON.stringify(d)));
         }
-        const d = row.data;
-        let text = `${d.purpose} — ${d.provider} (${d.source})`;
-        if (row.chapterTitle) text += ` · ${row.chapterTitle}`;
-        return text;
+        return out;
+      };
+
+      const dayLabel = iso => {
+        const day = String(iso || '').slice(0, 10);
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const yesterday = new Date(now.getTime() - 86400e3).toISOString().slice(0, 10);
+        if (day === today) return 'Today';
+        if (day === yesterday) return 'Yesterday';
+        return new Date(day + 'T12:00:00').toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric'
+        });
       };
 
       const renderStream = () => {
@@ -1293,32 +1409,33 @@
           list.innerHTML = '<div class="st-item"><span class="what">Nothing here yet.</span></div>';
           return;
         }
+        let currentDay = null;
         for (const row of rows) {
+          const day = dayLabel(row.at);
+          if (day !== currentDay) {
+            currentDay = day;
+            const head = document.createElement('div');
+            head.className = 'st-day';
+            head.textContent = day;
+            list.appendChild(head);
+          }
           const item = document.createElement('div');
           item.className = 'st-item';
+          item.title = row.kind.replace(/_/g, ' ');
+          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          icon.setAttribute('class', 'ic' + (CAT[row.kind] === 'ai' ? ' ai' : ''));
+          const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+          use.setAttribute('href', `/assets/icons.svg#${KIND_ICON[row.kind] || 'pulse'}`);
+          icon.appendChild(use);
           const when = document.createElement('span');
           when.className = 'when';
           when.textContent = String(row.at || '')
             .replace('T', ' ')
-            .slice(5, 16);
-          const kind = document.createElement('span');
-          kind.className = 'kind' + (CAT[row.kind] === 'ai' ? ' ai' : '');
-          kind.textContent = row.kind === 'ai_event' ? 'ai' : TYPE_LABELS[row.kind] || row.kind;
+            .slice(11, 16);
           const what = document.createElement('span');
           what.className = 'what';
-          what.textContent = describeStreamRow(row);
-          if (row.kind === 'ai_event') {
-            const mark = document.createElement('span');
-            if (row.data.purpose === 'prose-suggestion' && !row.data.justification) {
-              mark.className = 'warn';
-              mark.textContent = ' ⚠';
-            } else if (row.data.justification) {
-              mark.className = 'ok';
-              mark.textContent = ' ✓';
-            }
-            what.appendChild(mark);
-          }
-          item.append(when, kind, what);
+          for (const node of streamNodes(row)) what.appendChild(node);
+          item.append(icon, when, what);
           list.appendChild(item);
         }
       };

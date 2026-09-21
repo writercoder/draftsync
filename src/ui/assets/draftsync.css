@@ -236,3 +236,11 @@ a.menu-item {
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
+
+/* Icons — 1em, colored by the element's zone color */
+.ic {
+  width: 1.05em;
+  height: 1.05em;
+  vertical-align: -0.18em;
+  flex: none;
+}

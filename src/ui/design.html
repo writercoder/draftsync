@@ -164,6 +164,78 @@
       .feed .warn {
         color: var(--ai-orange);
       }
+      .vocab {
+        display: grid;
+        grid-template-columns: 1.6rem 11rem 1fr;
+        gap: 0.3rem 0.7rem;
+        align-items: baseline;
+        font-size: 0.88rem;
+      }
+      .vocab .k {
+        font-family: var(--font-mono);
+        font-size: 0.75rem;
+        color: var(--ink-soft);
+      }
+      .vocab .ic {
+        justify-self: center;
+      }
+      .vocab .infra-ic {
+        color: var(--infra);
+      }
+      .vocab .ai-ic {
+        color: var(--ai-pink);
+      }
+      .feed2 .day {
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin: 0.9rem 0 0.2rem;
+      }
+      .feed2 .item {
+        display: flex;
+        gap: 0.55rem;
+        align-items: baseline;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--ink-faint);
+        font-size: 0.86rem;
+      }
+      .feed2 .ic {
+        color: var(--infra);
+        align-self: center;
+      }
+      .feed2 .ic.ai {
+        color: var(--ai-pink);
+      }
+      .feed2 .t {
+        color: var(--ink-soft);
+        font-size: 0.7rem;
+        font-family: var(--font-mono);
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+      }
+      .feed2 .what {
+        flex: 1;
+      }
+      .feed2 strong {
+        font-weight: 600;
+      }
+      .feed2 .delta {
+        color: var(--ink-soft);
+        font-variant-numeric: tabular-nums;
+      }
+      .feed2 .quote {
+        display: block;
+        font-family: var(--font-authorly);
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+      }
+      .feed2 .ok {
+        color: var(--ai-green);
+      }
+      .feed2 .warn {
+        color: var(--ai-orange);
+      }
       .rules li {
         margin-bottom: 0.4rem;
       }
@@ -289,6 +361,70 @@
         </div>
       </div>
 
+      <h2>Actions &amp; events — the vocabulary</h2>
+      <p class="zone-note">
+        Every event kind and every action has one icon, one zone color, and one phrasing pattern:
+        <em>object first, verb quiet, numbers muted</em>. Icons are stroke-drawn on a 16px grid
+        (<code>/assets/icons.svg</code>) and take the zone color of their element.
+      </p>
+      <div class="specimen">
+        <div class="label">Events (the activity stream)</div>
+        <div class="vocab">
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#edit" /></svg>
+          <span class="k">file_edited</span>
+          <span
+            ><strong>The Opening</strong> edited
+            <span style="color: var(--ink-soft)">+12 −4 · 1,832 words</span></span
+          >
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#doc-plus" /></svg>
+          <span class="k">chapter_created</span>
+          <span><strong>Chapter VII</strong> added</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#layers" /></svg>
+          <span class="k">edition_created</span>
+          <span>edition <strong>Reader's Edition</strong> created</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#plane" /></svg>
+          <span class="k">review_sent</span>
+          <span>to <strong>Sarah Chen</strong> — Chapter III</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#inbox" /></svg>
+          <span class="k">review_received</span>
+          <span>from <strong>Sarah Chen</strong> — Chapter III</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#square" /></svg>
+          <span class="k">task_created</span>
+          <span>Fix pacing per editor notes — Chapter III</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#square-check" /></svg>
+          <span class="k">task_completed</span>
+          <span>Fix pacing per editor notes — Chapter III</span>
+          <svg class="ic ai-ic"><use href="/assets/icons.svg#sparkle" /></svg>
+          <span class="k">ai_event</span>
+          <span
+            >critique — claude.ai · Chapter III <span style="color: var(--ai-green)">✓</span></span
+          >
+        </div>
+      </div>
+      <div class="specimen">
+        <div class="label">Actions (menus and buttons)</div>
+        <div class="vocab">
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#square" /></svg>
+          <span class="k">task.create</span><span>Create task</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#plane" /></svg>
+          <span class="k">review.request</span><span>Send for review</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#inbox" /></svg>
+          <span class="k">review.receive</span><span>Record review</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#layers" /></svg>
+          <span class="k">edition.create</span><span>New edition</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#sliders" /></svg>
+          <span class="k">metadata.set</span><span>Metadata</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#import" /></svg>
+          <span class="k">chapter.import</span><span>Import chapters</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#download" /></svg>
+          <span class="k">export.project</span><span>Download EPUB · DOCX · PDF</span>
+          <svg class="ic ai-ic"><use href="/assets/icons.svg#sparkle" /></svg>
+          <span class="k">ai.log_event</span><span>Log AI usage</span>
+          <svg class="ic infra-ic"><use href="/assets/icons.svg#pulse" /></svg>
+          <span class="k">activity.stream</span><span>Activity panel</span>
+        </div>
+      </div>
+
       <h2>Composites — the zones together</h2>
       <p class="zone-note">
         Where the language earns its keep: one surface, three zones, no ambiguity about what
@@ -310,41 +446,53 @@
         </div>
       </div>
       <div class="specimen">
-        <div class="label">Newsfeed — all three zones in one stream</div>
-        <div class="feed">
+        <div class="label">Newsfeed v2 — day-grouped, icon-led, object first</div>
+        <div class="feed2">
+          <div class="day">Today</div>
           <div class="item">
-            <span class="when">09-21 14:02</span><span class="kind">file edited</span>
+            <svg class="ic"><use href="/assets/icons.svg#edit" /></svg>
+            <span class="t">14:02</span>
             <span class="what"
-              >The Opening — +12/−4 lines, now 1,832 words
+              ><strong>The Opening</strong> edited
+              <span class="delta">+12 −4 · 1,832 words</span>
               <span class="quote"
                 >“It was not the storm that woke her, but the silence after.”</span
               >
             </span>
           </div>
           <div class="item">
-            <span class="when">09-21 11:40</span><span class="kind">review received</span>
-            <span class="what">from Sarah Chen on Chapter 3 (file attached)</span>
+            <svg class="ic"><use href="/assets/icons.svg#inbox" /></svg>
+            <span class="t">11:40</span>
+            <span class="what">from <strong>Sarah Chen</strong> — Chapter III (file attached)</span>
           </div>
           <div class="item">
-            <span class="when">09-21 10:15</span><span class="kind ai">ai · critique</span>
+            <svg class="ic ai"><use href="/assets/icons.svg#sparkle" /></svg>
+            <span class="t">10:15</span>
             <span class="what"
-              >claude.ai session on Chapter 3 <span class="ok">✓ justified</span></span
+              >critique — claude.ai · <strong>Chapter III</strong>
+              <span class="ok">✓ justified</span></span
             >
           </div>
+          <div class="day">Yesterday</div>
           <div class="item">
-            <span class="when">09-20 18:55</span><span class="kind ai">ai · prose</span>
+            <svg class="ic ai"><use href="/assets/icons.svg#sparkle" /></svg>
+            <span class="t">18:55</span>
             <span class="what"
-              >suggestion adopted in Introduction
+              >prose suggestion — <strong>Introduction</strong>
               <span class="warn">⚠ needs acknowledgment</span></span
             >
           </div>
           <div class="item">
-            <span class="when">09-20 16:20</span><span class="kind">task done</span>
-            <span class="what">Fix pacing per editor notes — Chapter 3</span>
+            <svg class="ic"><use href="/assets/icons.svg#square-check" /></svg>
+            <span class="t">16:20</span>
+            <span class="what">Fix pacing per editor notes — <strong>Chapter III</strong></span>
           </div>
           <div class="item">
-            <span class="when">09-20 09:03</span><span class="kind">sent for review</span>
-            <span class="what">to Tom Wade — Everett copy, “pacing and dialogue in acts 2–3”</span>
+            <svg class="ic"><use href="/assets/icons.svg#plane" /></svg>
+            <span class="t">09:03</span>
+            <span class="what"
+              >to <strong>Tom Wade</strong> — Everett copy, “pacing and dialogue in acts 2–3”</span
+            >
           </div>
         </div>
       </div>
