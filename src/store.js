@@ -147,6 +147,31 @@ export function openStore(dataDir = getDataDir()) {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       UNIQUE(collection_id, name)
     );
+    CREATE TABLE IF NOT EXISTS chapter_texts (
+      chapter_id INTEGER PRIMARY KEY REFERENCES chapters(id) ON DELETE CASCADE,
+      content TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+      edition_id INTEGER REFERENCES editions(id) ON DELETE SET NULL,
+      reviewer_name TEXT NOT NULL,
+      reviewer_email TEXT NOT NULL,
+      body TEXT NOT NULL DEFAULT '',
+      file TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS activities (
+      id INTEGER PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      chapter_id INTEGER REFERENCES chapters(id) ON DELETE SET NULL,
+      type TEXT NOT NULL,
+      data TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_activities_project ON activities(project_id, id);
     CREATE TABLE IF NOT EXISTS collection_edition_projects (
       edition_id INTEGER NOT NULL REFERENCES collection_editions(id) ON DELETE CASCADE,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -161,6 +186,18 @@ export function openStore(dataDir = getDataDir()) {
     .map(c => c.name);
   if (!projectCols.includes('label')) {
     db.exec('ALTER TABLE projects ADD COLUMN label TEXT');
+  }
+  const chapterCols = db
+    .prepare('PRAGMA table_info(chapters)')
+    .all()
+    .map(c => c.name);
+  if (!chapterCols.includes('word_count')) {
+    db.exec(`
+      ALTER TABLE chapters ADD COLUMN word_count INTEGER;
+      ALTER TABLE chapters ADD COLUMN excerpt TEXT NOT NULL DEFAULT '';
+      ALTER TABLE chapters ADD COLUMN content_hash TEXT;
+      ALTER TABLE chapters ADD COLUMN analyzed_at TEXT;
+    `);
   }
   return new Store(db);
 }
@@ -913,6 +950,163 @@ export class Store {
     });
     replace();
     return this.listCollectionEditionProjects(editionId);
+  }
+
+  /**
+   * Update a chapter's derived text stats (no AI — plain parsing)
+   *
+   * @param {number} id - Chapter ID
+   * @param {Object} stats - {wordCount, excerpt, contentHash}
+   * @returns {Object|undefined} Updated chapter
+   */
+  updateChapterStats(id, { wordCount, excerpt, contentHash }) {
+    this.db
+      .prepare(
+        `UPDATE chapters SET word_count = ?, excerpt = ?, content_hash = ?,
+           analyzed_at = datetime('now') WHERE id = ?`
+      )
+      .run(wordCount, excerpt, contentHash, id);
+    return this.getChapter(id);
+  }
+
+  /**
+   * Get the stored text snapshot for a chapter (diff baseline)
+   *
+   * @param {number} chapterId - Chapter ID
+   * @returns {string|null} Stored content or null
+   */
+  getChapterText(chapterId) {
+    return (
+      this.db.prepare('SELECT content FROM chapter_texts WHERE chapter_id = ?').get(chapterId)
+        ?.content ?? null
+    );
+  }
+
+  /**
+   * Store the text snapshot for a chapter
+   *
+   * @param {number} chapterId - Chapter ID
+   * @param {string} content - Current file content
+   */
+  setChapterText(chapterId, content) {
+    this.db
+      .prepare(
+        `INSERT INTO chapter_texts (chapter_id, content, updated_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(chapter_id) DO UPDATE SET content = excluded.content,
+           updated_at = datetime('now')`
+      )
+      .run(chapterId, content);
+  }
+
+  /**
+   * Record a timeline activity
+   *
+   * @param {number} projectId - Project ID
+   * @param {Object} fields - {type, chapterId?, data?}
+   * @returns {Object} The activity row
+   */
+  addActivity(projectId, { type, chapterId = null, data = {} }) {
+    if (!type) throw new Error('type is required');
+    const { lastInsertRowid } = this.db
+      .prepare('INSERT INTO activities (project_id, chapter_id, type, data) VALUES (?, ?, ?, ?)')
+      .run(projectId, chapterId, type, JSON.stringify(data));
+    return this.db.prepare('SELECT * FROM activities WHERE id = ?').get(lastInsertRowid);
+  }
+
+  /**
+   * List timeline activities, newest first
+   *
+   * @param {number} projectId - Project ID
+   * @param {Object} [options] - {chapterId?, limit?}
+   * @returns {Array<Object>} Activity rows (data parsed), with chapterTitle
+   */
+  listActivities(projectId, { chapterId = null, limit = 100 } = {}) {
+    const rows = chapterId
+      ? this.db
+          .prepare(
+            `SELECT a.*, c.title AS chapterTitle FROM activities a
+             LEFT JOIN chapters c ON c.id = a.chapter_id
+             WHERE a.project_id = ? AND a.chapter_id = ? ORDER BY a.id DESC LIMIT ?`
+          )
+          .all(projectId, chapterId, limit)
+      : this.db
+          .prepare(
+            `SELECT a.*, c.title AS chapterTitle FROM activities a
+             LEFT JOIN chapters c ON c.id = a.chapter_id
+             WHERE a.project_id = ? ORDER BY a.id DESC LIMIT ?`
+          )
+          .all(projectId, limit);
+    return rows.map(r => ({ ...r, data: JSON.parse(r.data) }));
+  }
+
+  /**
+   * Create a review of a chapter or an edition
+   *
+   * @param {number} projectId - Project ID
+   * @param {Object} fields - {chapterId?, editionId?, reviewerName,
+   *   reviewerEmail, body?, file?} — exactly one of chapterId/editionId
+   * @returns {Object} The review row
+   */
+  createReview(projectId, fields) {
+    const {
+      chapterId = null,
+      editionId = null,
+      reviewerName,
+      reviewerEmail,
+      body = '',
+      file = null
+    } = fields;
+    if (!reviewerName || !reviewerName.trim()) throw new Error('reviewerName is required');
+    if (!reviewerEmail || !reviewerEmail.trim()) throw new Error('reviewerEmail is required');
+    if ((chapterId === null) === (editionId === null)) {
+      throw new Error('a review targets exactly one of chapterId or editionId');
+    }
+    const { lastInsertRowid } = this.db
+      .prepare(
+        `INSERT INTO reviews (project_id, chapter_id, edition_id, reviewer_name,
+           reviewer_email, body, file) VALUES (?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(projectId, chapterId, editionId, reviewerName.trim(), reviewerEmail.trim(), body, file);
+    return this.getReview(lastInsertRowid);
+  }
+
+  /**
+   * Get one review by ID
+   *
+   * @param {number} id - Review ID
+   * @returns {Object|undefined} Review row
+   */
+  getReview(id) {
+    return this.db.prepare('SELECT * FROM reviews WHERE id = ?').get(id);
+  }
+
+  /**
+   * List a project's reviews, newest first, with target names
+   *
+   * @param {number} projectId - Project ID
+   * @returns {Array<Object>} Review rows with chapterTitle/editionName
+   */
+  listReviews(projectId) {
+    return this.db
+      .prepare(
+        `SELECT r.*, c.title AS chapterTitle, e.name AS editionName
+         FROM reviews r
+         LEFT JOIN chapters c ON c.id = r.chapter_id
+         LEFT JOIN editions e ON e.id = r.edition_id
+         WHERE r.project_id = ? ORDER BY r.id DESC`
+      )
+      .all(projectId);
+  }
+
+  /**
+   * Delete a review
+   *
+   * @param {number} id - Review ID
+   * @returns {boolean} True if deleted
+   */
+  deleteReview(id) {
+    return this.db.prepare('DELETE FROM reviews WHERE id = ?').run(id).changes > 0;
   }
 
   /** Close the database */

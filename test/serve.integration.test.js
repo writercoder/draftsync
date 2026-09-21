@@ -10,6 +10,7 @@ import { mkdtempSync, rmSync, mkdirSync, writeFileSync } from 'fs';
 import { readFile } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { Buffer } from 'buffer';
 import { openStore } from '../src/store.js';
 import { createDraftsyncServer, looksLikeProject } from '../src/serve.js';
 
@@ -177,7 +178,7 @@ describe('Serve Integration Tests', () => {
 
     it('should reject empty tasks and unknown chapters', async () => {
       expect((await api(`${p}/tasks`, 'POST', { text: '  ' })).status).toBe(400);
-      expect((await api(`${p}/tasks`, 'POST', { text: 'x', chapter_id: 999 })).status).toBe(400);
+      expect((await api(`${p}/tasks`, 'POST', { text: 'x', chapter_id: 999 })).status).toBe(404);
     });
   });
 
@@ -280,6 +281,123 @@ describe('Serve Integration Tests', () => {
       const page = await fetch(`${base}/c/${col.body.id}`);
       expect(page.status).toBe(200);
       expect(await page.text()).toContain('draftsync collection');
+    });
+  });
+
+  describe('text stats and scan', () => {
+    it('should import with stats and detect file edits with diff magnitude', async () => {
+      await api(`${p}/import`, 'POST');
+      let board = await api(`${p}/board`);
+      const opening = board.body.chapters.find(c => c.file === 'content/01-opening.md');
+      expect(opening.title).toBe('The Opening');
+      expect(opening.word_count).toBe(1);
+      expect(opening.excerpt).toBe('Text.');
+
+      // First scan: nothing changed
+      const clean = await api(`${p}/scan`, 'POST');
+      expect(clean.body.changed).toEqual([]);
+
+      // Edit the file, scan again
+      writeFileSync(
+        join(projectDir, 'content', '01-opening.md'),
+        '# The Opening\n\nText.\n\nA whole new paragraph of five words.\n'
+      );
+      const scan = await api(`${p}/scan`, 'POST');
+      expect(scan.body.changed).toHaveLength(1);
+      expect(scan.body.changed[0]).toMatchObject({ chapter_id: opening.id, linesAdded: 2 });
+
+      board = await api(`${p}/board`);
+      expect(board.body.chapters.find(c => c.id === opening.id).word_count).toBe(8);
+
+      const timeline = await api(`${p}/timeline`);
+      const edited = timeline.body.activities.find(a => a.type === 'file_edited');
+      expect(edited).toMatchObject({ chapter_id: opening.id, chapterTitle: 'The Opening' });
+      expect(edited.data.linesAdded).toBe(2);
+    });
+  });
+
+  describe('reviews and timeline', () => {
+    it('should receive chapter and edition reviews, with files, on the timeline', async () => {
+      const chapter = await api(`${p}/chapters`, 'POST', { title: 'Ch 1' });
+      const edition = await api(`${p}/editions`, 'POST', { name: 'RE' });
+
+      const r1 = await api(`${p}/reviews`, 'POST', {
+        chapter_id: chapter.body.id,
+        reviewer_name: 'Sarah',
+        reviewer_email: 'sarah@example.com',
+        body: 'The pacing drags in the middle.'
+      });
+      expect(r1.status).toBe(201);
+
+      const r2 = await api(`${p}/reviews`, 'POST', {
+        edition_id: edition.body.id,
+        reviewer_name: 'Tom',
+        reviewer_email: 'tom@example.com',
+        file_name: 'notes.txt',
+        file_base64: Buffer.from('typed feedback file').toString('base64')
+      });
+      expect(r2.status).toBe(201);
+      expect(r2.body.file).toMatch(/^reviews\//);
+
+      const list = await api(`${p}/reviews`);
+      expect(list.body.reviews).toHaveLength(2);
+      expect(list.body.reviews.map(r => r.reviewer_name).sort()).toEqual(['Sarah', 'Tom']);
+      expect(list.body.reviews.find(r => r.chapter_id).chapterTitle).toBe('Ch 1');
+      expect(list.body.reviews.find(r => r.edition_id).editionName).toBe('RE');
+
+      const timeline = await api(`${p}/timeline`);
+      const types = timeline.body.activities.map(a => a.type);
+      expect(types.filter(t => t === 'review_received')).toHaveLength(2);
+      expect(types).toContain('chapter_created');
+      expect(types).toContain('edition_created');
+
+      // Task activities: created and completed
+      const task = await api(`${p}/tasks`, 'POST', {
+        text: 'Fix pacing',
+        chapter_id: chapter.body.id
+      });
+      await api(`${p}/tasks/${task.body.id}`, 'PATCH', { done: true });
+      const after = await api(`${p}/timeline?chapter=${chapter.body.id}`);
+      const chTypes = after.body.activities.map(a => a.type);
+      expect(chTypes).toContain('task_created');
+      expect(chTypes).toContain('task_completed');
+    });
+
+    it('should reject reviews without exactly one target or without contact', async () => {
+      const both = await api(`${p}/reviews`, 'POST', {
+        reviewer_name: 'X',
+        reviewer_email: 'x@example.com'
+      });
+      expect(both.status).toBe(400);
+      const noEmail = await api(`${p}/reviews`, 'POST', {
+        chapter_id: 1,
+        reviewer_name: 'X'
+      });
+      expect(noEmail.status).toBe(400);
+    });
+  });
+
+  describe('operation RPC and OpenAPI', () => {
+    it('should execute any operation via POST /api/op/{name}', async () => {
+      const created = await api('/api/op/chapter.create', 'POST', {
+        project_id: project.id,
+        title: 'Via RPC'
+      });
+      expect(created.status).toBe(200);
+      expect(created.body.title).toBe('Via RPC');
+
+      const bad = await api('/api/op/chapter.create', 'POST', { project_id: project.id });
+      expect(bad.status).toBe(400);
+      expect(bad.body.error).toContain('title');
+
+      expect((await api('/api/op/nope.nothing', 'POST', {})).status).toBe(404);
+    });
+
+    it('should serve the OpenAPI document', async () => {
+      const doc = await api('/api/openapi.json');
+      expect(doc.status).toBe(200);
+      expect(doc.body.openapi).toBe('3.1.0');
+      expect(doc.body.paths['/api/op/review.create']).toBeDefined();
     });
   });
 

@@ -248,6 +248,40 @@ support **editions** of their own — an ordered selection of member
 stories — with anthology downloads (EPUB/DOCX/PDF) built from every
 story's chapters, titled after the collection.
 
+### Operations, API, and CLI parity
+
+Every draftsync capability is a named **operation** (ADR 0001) — the web
+UI, the REST routes, and the CLI are all adapters over one registry, so
+anything the app can do is scriptable:
+
+```bash
+draftsync op --list                 # every operation with its description
+draftsync op project.list
+draftsync op chapter.create '{"project_id": 1, "title": "Chapter 7"}'
+```
+
+While `draftsync serve` runs, the same operations are available over
+HTTP — resource routes for the UI, plus a uniform RPC surface for
+agents and scripts: `POST /api/op/{name}` with a JSON body, documented
+by `GET /api/openapi.json` (generated from the operation schemas).
+
+### Chapter text stats, edit detection, reviews, and timeline
+
+- **Text stats — no AI, plain parsing**: chapters linked to files carry
+  a word count, extracted title, and first-paragraph excerpt (shown on
+  the board). `project.scan` (run automatically when a board loads, or
+  via `draftsync op project.scan`) re-analyzes files and **detects
+  edits** by content hash, measuring change magnitude with a classic
+  line diff (+added/−removed). Markdown only in v1; DOCX/Google Docs
+  revisions are a future milestone.
+- **Reviews**: record received feedback on a chapter or an edition —
+  reviewer name and email, with text and/or an attached file (stored
+  under `~/.draftsync/reviews/`). Board: the Reviews dialog;
+  API/CLI: `review.create`. Google Doc comments integration is planned.
+- **Timeline**: a per-project (and per-chapter) activity feed — file
+  edited, review received, task created/completed, chapter and edition
+  created. Board: the Timeline dialog; API: `timeline.list`.
+
 ### AI Auditability
 
 Policy: AI output should not end up in prose without specific

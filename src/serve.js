@@ -1,44 +1,33 @@
 /**
- * Local Draftsync Server
+ * Local Draftsync Server — thin HTTP adapter over the operation
+ * registry (ADR 0001)
  *
- * Global (not per-workspace): serves a home view of every registered
- * project — grouped by label — and a kanban board per project, from the
- * single SQLite store in ~/.draftsync. Binds to localhost only.
- *
- * Routes: `/` home, `/p/:id` board, `/api/projects` registry, and
- * project-scoped APIs under `/api/p/:id/...` (board, chapters, import,
- * ai-events, ai-ingest, export, metadata).
+ * Serves the web app pages, resource-style routes for the UI, a
+ * generic RPC endpoint (POST /api/op/{name}) exposing every operation,
+ * and an OpenAPI document generated from the registry schemas.
+ * Binds to localhost only.
  */
 
 import http from 'http';
-import crypto from 'crypto';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
-import { openStore, getDataDir, STAGES } from './store.js';
-import { getAllMarkdownFiles, filterExcludedFiles, getFilesToBuild } from './file-filter.js';
-import { AI_PURPOSES, providerFromUrl, ingestClaudeCode } from './ai-audit.js';
-import {
-  convertMarkdownFilesToDocx,
-  convertMarkdownFilesToPdf,
-  convertMarkdownToEpub
-} from './pandoc.js';
+import { openStore, getDataDir } from './store.js';
+import { execute, buildOpenApiDocument, OperationError } from './core/registry.js';
+import './core/operations.js';
 
 const UI_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui');
 
-const EXPORT_TYPES = {
-  epub: { mime: 'application/epub+zip', ext: 'epub' },
-  docx: {
-    mime: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    ext: 'docx'
-  },
-  pdf: { mime: 'application/pdf', ext: 'pdf' }
+const EXPORT_MIME = {
+  epub: 'application/epub+zip',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  pdf: 'application/pdf'
 };
 
 /**
- * Read and JSON-parse a request body (up to 1MB)
+ * Read and JSON-parse a request body (up to 16MB — review file uploads)
  *
  * @param {http.IncomingMessage} req - Request
  * @returns {Promise<Object>} Parsed body ({} when empty)
@@ -48,155 +37,17 @@ function readBody(req) {
     let data = '';
     req.on('data', chunk => {
       data += chunk;
-      if (data.length > 1e6) reject(new Error('body too large'));
+      if (data.length > 16e6) reject(new OperationError('body too large', 400));
     });
     req.on('end', () => {
       try {
         resolve(data ? JSON.parse(data) : {});
       } catch {
-        reject(new Error('invalid JSON'));
+        reject(new OperationError('invalid JSON', 400));
       }
     });
     req.on('error', reject);
   });
-}
-
-/**
- * Derive a chapter title from a Markdown file (first H1, else basename)
- *
- * @param {string} filePath - Path to the Markdown file
- * @returns {Promise<string>} Title
- */
-async function titleFromFile(filePath) {
-  try {
-    const content = await fs.readFile(filePath, 'utf8');
-    const h1 = content.match(/^#\s+(.+)$/m);
-    if (h1) return h1[1].trim();
-  } catch {
-    // fall through to basename
-  }
-  return path.basename(filePath, '.md');
-}
-
-/**
- * Read a project's draftsync manifest (empty shape when missing)
- *
- * @param {string} projectPath - Absolute project directory
- * @returns {Promise<Object>} Manifest object
- */
-async function readProjectManifest(projectPath) {
-  try {
-    return JSON.parse(await fs.readFile(path.join(projectPath, '.draftsync.json'), 'utf8'));
-  } catch {
-    return { files: {}, config: {} };
-  }
-}
-
-/**
- * Build the manuscript in the requested format, returning the output path
- *
- * @param {Object} project - Project row (path, name)
- * @param {string} format - 'epub', 'docx', or 'pdf'
- * @returns {Promise<string>} Absolute path of the built file
- */
-async function buildExport(project, format, options = {}) {
-  const metadataPath = path.join(project.path, 'templates', 'metadata.yaml');
-  let mdFiles;
-  let outputName = project.name;
-  if (options.editionFiles) {
-    mdFiles = options.editionFiles;
-    outputName = `${project.name} - ${options.editionName}`;
-    if (mdFiles.length === 0) {
-      throw new Error('this edition has no chapters with linked files');
-    }
-  } else {
-    mdFiles = await getFilesToBuild({
-      contentDir: path.join(project.path, 'content'),
-      metadataPath
-    });
-    if (mdFiles.length === 0) {
-      throw new Error('no Markdown files to build in content/');
-    }
-  }
-  let metadata = null;
-  try {
-    await fs.access(metadataPath);
-    metadata = metadataPath;
-  } catch {
-    // optional
-  }
-  const output = path.join(project.path, 'dist', `${outputName}.${EXPORT_TYPES[format].ext}`);
-
-  if (format === 'docx') {
-    await convertMarkdownFilesToDocx(mdFiles, output, { metadata });
-  } else if (format === 'pdf') {
-    await convertMarkdownFilesToPdf(mdFiles, output, { metadata });
-  } else {
-    const css = path.join(project.path, 'templates', 'epub.css');
-    let cssFile = null;
-    try {
-      await fs.access(css);
-      cssFile = css;
-    } catch {
-      // optional
-    }
-    await convertMarkdownToEpub(mdFiles, output, { metadata, css: cssFile, tocDepth: 3 });
-  }
-  return output;
-}
-
-/**
- * Build a collection (anthology) export from its member stories
- *
- * Each story contributes its default build file list; stories whose
- * content can't be resolved are skipped with a warning in the result.
- *
- * @param {import('./store.js').Store} store - Open store
- * @param {Object} collection - Collection row
- * @param {string} format - 'epub', 'docx', or 'pdf'
- * @param {Object|null} edition - Collection edition row (optional)
- * @returns {Promise<string>} Absolute path of the built file
- */
-async function buildCollectionExport(store, collection, format, edition = null) {
-  const projects = edition
-    ? store.listCollectionEditionProjects(edition.id)
-    : store.listCollectionProjects(collection.id);
-  const mdFiles = [];
-  for (const project of projects) {
-    try {
-      const files = await getFilesToBuild({
-        contentDir: path.join(project.path, 'content'),
-        metadataPath: path.join(project.path, 'templates', 'metadata.yaml')
-      });
-      mdFiles.push(...files);
-    } catch {
-      // story with no content/ — skipped
-    }
-  }
-  if (mdFiles.length === 0) {
-    throw new Error('no buildable stories in this collection');
-  }
-
-  const exportsDir = path.join(getDataDir(), 'exports');
-  await fs.mkdir(exportsDir, { recursive: true });
-  const outputName = edition ? `${collection.name} - ${edition.name}` : collection.name;
-  const metadataPath = path.join(exportsDir, `${outputName}.meta.yaml`);
-  await fs.writeFile(
-    metadataPath,
-    `title: ${JSON.stringify(outputName)}\n` +
-      (collection.description ? `description: ${JSON.stringify(collection.description)}\n` : ''),
-    'utf8'
-  );
-  const output = path.join(exportsDir, `${outputName}.${EXPORT_TYPES[format].ext}`);
-
-  if (format === 'docx') {
-    await convertMarkdownFilesToDocx(mdFiles, output, { metadata: metadataPath });
-  } else if (format === 'pdf') {
-    await convertMarkdownFilesToPdf(mdFiles, output, { metadata: metadataPath });
-  } else {
-    await convertMarkdownToEpub(mdFiles, output, { metadata: metadataPath, tocDepth: 3 });
-  }
-  return output;
 }
 
 /**
@@ -225,416 +76,263 @@ export async function looksLikeProject(dir) {
  * @returns {http.Server} Configured server (not yet listening)
  */
 export function createDraftsyncServer({ store }) {
+  const ctx = { store };
+
   return http.createServer(async (req, res) => {
     const send = (status, body, type = 'application/json') => {
       res.writeHead(status, { 'Content-Type': type });
       res.end(type === 'application/json' ? JSON.stringify(body) : body);
     };
-    const sendPage = async file => {
-      const html = await fs.readFile(path.join(UI_DIR, file), 'utf8');
-      return send(200, html, 'text/html; charset=utf-8');
+    const sendPage = async file =>
+      send(200, await fs.readFile(path.join(UI_DIR, file), 'utf8'), 'text/html; charset=utf-8');
+    const run = (name, input) => execute(name, ctx, input);
+    const streamExport = async (name, input) => {
+      const result = await run(name, input);
+      const data = await fs.readFile(result.path);
+      res.writeHead(200, {
+        'Content-Type': EXPORT_MIME[result.format],
+        'Content-Disposition': `attachment; filename="${result.filename}"`
+      });
+      res.end(data);
     };
 
     try {
       const url = new URL(req.url, 'http://localhost');
+      const p = url.pathname;
+      const m = pattern => p.match(pattern);
 
       // Pages
-      if (req.method === 'GET' && url.pathname === '/') return sendPage('home.html');
-      if (req.method === 'GET' && /^\/p\/\d+$/.test(url.pathname)) return sendPage('kanban.html');
-      if (req.method === 'GET' && /^\/c\/\d+$/.test(url.pathname))
-        return sendPage('collection.html');
+      if (req.method === 'GET' && p === '/') return await sendPage('home.html');
+      if (req.method === 'GET' && m(/^\/p\/\d+$/)) return await sendPage('kanban.html');
+      if (req.method === 'GET' && m(/^\/c\/\d+$/)) return await sendPage('collection.html');
 
-      // Global open-tasks overview
-      if (req.method === 'GET' && url.pathname === '/api/tasks') {
-        return send(200, { tasks: store.listAllOpenTasks() });
+      // Generic RPC + OpenAPI — every operation, one endpoint shape
+      const opCall = m(/^\/api\/op\/([a-z_]+\.[a-z_]+)$/);
+      if (opCall && req.method === 'POST') {
+        return send(200, await run(opCall[1], await readBody(req)));
+      }
+      if (req.method === 'GET' && p === '/api/openapi.json') {
+        return send(200, buildOpenApiDocument());
+      }
+
+      // Global
+      if (req.method === 'GET' && p === '/api/tasks') return send(200, await run('task.list_open'));
+      if (req.method === 'GET' && p === '/api/projects') {
+        return send(200, await run('project.list'));
+      }
+      if (req.method === 'POST' && p === '/api/projects') {
+        return send(201, await run('project.register', await readBody(req)));
+      }
+      let x;
+      if ((x = m(/^\/api\/projects\/(\d+)$/)) && req.method === 'PATCH') {
+        return send(
+          200,
+          await run('project.update', { project_id: x[1], ...(await readBody(req)) })
+        );
       }
 
       // Collections
-      if (req.method === 'GET' && url.pathname === '/api/collections') {
-        return send(200, { collections: store.listCollections() });
+      if (req.method === 'GET' && p === '/api/collections') {
+        return send(200, await run('collection.list'));
       }
-      if (req.method === 'POST' && url.pathname === '/api/collections') {
-        return send(201, store.createCollection(await readBody(req)));
+      if (req.method === 'POST' && p === '/api/collections') {
+        return send(201, await run('collection.create', await readBody(req)));
       }
-      const colMatch = url.pathname.match(/^\/api\/collections\/(\d+)(\/.*)?$/);
-      if (colMatch) {
-        const collection = store.getCollection(Number(colMatch[1]));
-        if (!collection) return send(404, { error: 'collection not found' });
-        const sub = colMatch[2] || '';
-
-        if (sub === '' && req.method === 'GET') {
-          return send(200, {
-            collection,
-            projects: store.listCollectionProjects(collection.id),
-            editions: store.listCollectionEditions(collection.id),
-            allProjects: store.listProjects()
-          });
+      if ((x = m(/^\/api\/collections\/(\d+)$/))) {
+        const collection_id = x[1];
+        if (req.method === 'GET') return send(200, await run('collection.get', { collection_id }));
+        if (req.method === 'PATCH') {
+          return send(
+            200,
+            await run('collection.update', { collection_id, ...(await readBody(req)) })
+          );
         }
-        if (sub === '' && req.method === 'PATCH') {
-          return send(200, store.updateCollection(collection.id, await readBody(req)));
+        if (req.method === 'DELETE') {
+          return send(200, await run('collection.delete', { collection_id }));
         }
-        if (sub === '' && req.method === 'DELETE') {
-          store.deleteCollection(collection.id);
-          return send(200, { deleted: true });
-        }
-        if (sub === '/projects' && req.method === 'PUT') {
-          const body = await readBody(req);
-          if (!Array.isArray(body.project_ids)) {
-            return send(400, { error: 'project_ids (array) is required' });
-          }
-          return send(200, {
-            projects: store.setCollectionProjects(collection.id, body.project_ids)
-          });
-        }
-        if (sub === '/editions' && req.method === 'POST') {
-          return send(201, store.createCollectionEdition(collection.id, await readBody(req)));
-        }
-        const colEd = sub.match(/^\/editions\/(\d+)(\/projects)?$/);
-        if (colEd) {
-          const edition = store.getCollectionEdition(Number(colEd[1]));
-          if (!edition || edition.collection_id !== collection.id) {
-            return send(404, { error: 'edition not found' });
-          }
-          if (colEd[2] && req.method === 'PUT') {
-            const body = await readBody(req);
-            if (!Array.isArray(body.project_ids)) {
-              return send(400, { error: 'project_ids (array) is required' });
-            }
-            return send(200, {
-              projects: store.setCollectionEditionProjects(edition.id, body.project_ids)
-            });
-          }
-          if (!colEd[2] && req.method === 'GET') {
-            return send(200, {
-              edition,
-              projects: store.listCollectionEditionProjects(edition.id)
-            });
-          }
-          if (!colEd[2] && req.method === 'DELETE') {
-            store.deleteCollectionEdition(edition.id);
-            return send(200, { deleted: true });
-          }
-        }
-        const colExport = sub.match(/^\/export\/(epub|docx|pdf)$/);
-        if (colExport && req.method === 'GET') {
-          try {
-            let edition = null;
-            const editionId = url.searchParams.get('edition');
-            if (editionId) {
-              edition = store.getCollectionEdition(Number(editionId));
-              if (!edition || edition.collection_id !== collection.id) {
-                return send(404, { error: 'edition not found' });
-              }
-            }
-            const filePath = await buildCollectionExport(store, collection, colExport[1], edition);
-            const data = await fs.readFile(filePath);
-            res.writeHead(200, {
-              'Content-Type': EXPORT_TYPES[colExport[1]].mime,
-              'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`
-            });
-            return res.end(data);
-          } catch (error) {
-            return send(500, { error: error.message });
-          }
-        }
-        return send(404, { error: 'not found' });
       }
-
-      // Project registry
-      if (req.method === 'GET' && url.pathname === '/api/projects') {
-        return send(200, { projects: store.listProjects() });
+      if ((x = m(/^\/api\/collections\/(\d+)\/projects$/)) && req.method === 'PUT') {
+        return send(
+          200,
+          await run('collection.set_projects', { collection_id: x[1], ...(await readBody(req)) })
+        );
       }
-      if (req.method === 'POST' && url.pathname === '/api/projects') {
-        const body = await readBody(req);
-        const projectPath = path.resolve(body.path || '');
-        let stat;
-        try {
-          stat = await fs.stat(projectPath);
-        } catch {
-          return send(400, { error: `not a directory: ${projectPath}` });
-        }
-        if (!stat.isDirectory()) {
-          return send(400, { error: `not a directory: ${projectPath}` });
-        }
-        return send(201, store.getOrCreateProject(projectPath));
-      }
-      const projectEdit = url.pathname.match(/^\/api\/projects\/(\d+)$/);
-      if (req.method === 'PATCH' && projectEdit) {
-        const project = store.getProject(Number(projectEdit[1]));
-        if (!project) return send(404, { error: 'project not found' });
-        const body = await readBody(req);
-        return send(200, store.updateProject(project.id, body));
-      }
-
-      // Project-scoped API
-      const scoped = url.pathname.match(/^\/api\/p\/(\d+)(\/.*)$/);
-      if (!scoped) return send(404, { error: 'not found' });
-      const project = store.getProject(Number(scoped[1]));
-      if (!project) return send(404, { error: 'project not found' });
-      const route = scoped[2];
-      const chapterMatch = route.match(/^\/chapters\/(\d+)$/);
-      const taskMatch = route.match(/^\/tasks\/(\d+)$/);
-      const aiMatch = route.match(/^\/ai-events\/(\d+)$/);
-      const editionMatch = route.match(/^\/editions\/(\d+)$/);
-      const editionChaptersMatch = route.match(/^\/editions\/(\d+)\/chapters$/);
-      const exportMatch = route.match(/^\/export\/(epub|docx|pdf)$/);
-
-      if (req.method === 'GET' && route === '/board') {
-        const aiEvents = store.listAiEvents(project.id);
-        const aiCounts = {};
-        for (const e of aiEvents) {
-          if (e.chapter_id) aiCounts[e.chapter_id] = (aiCounts[e.chapter_id] || 0) + 1;
-        }
-        const manifest = await readProjectManifest(project.path);
-        const chapters = store.listChapters(project.id).map(chapter => {
-          const gdocId = chapter.file && manifest.files?.[chapter.file]?.gdocId;
-          return gdocId
-            ? { ...chapter, gdocUrl: `https://docs.google.com/document/d/${gdocId}/edit` }
-            : chapter;
-        });
-        const taskCounts = {};
-        for (const t of store.listTasks(project.id)) {
-          if (!t.done && t.chapter_id)
-            taskCounts[t.chapter_id] = (taskCounts[t.chapter_id] || 0) + 1;
-        }
-        const driveFolderId = manifest.config?.driveFolderId;
-        return send(200, {
-          project: {
-            id: project.id,
-            name: project.name,
-            path: project.path,
-            label: project.label,
-            driveFolderUrl: driveFolderId
-              ? `https://drive.google.com/drive/folders/${driveFolderId}`
-              : null
-          },
-          stages: STAGES,
-          chapters,
-          tasks: { openByChapter: taskCounts },
-          ai: { total: aiEvents.length, byChapter: aiCounts }
-        });
-      }
-
-      if (req.method === 'GET' && route === '/tasks') {
-        return send(200, { tasks: store.listTasks(project.id) });
-      }
-      if (req.method === 'POST' && route === '/tasks') {
-        const body = await readBody(req);
-        if (body.chapter_id) {
-          const chapter = store.getChapter(Number(body.chapter_id));
-          if (!chapter || chapter.project_id !== project.id) {
-            return send(400, { error: 'unknown chapter' });
-          }
-        }
+      if ((x = m(/^\/api\/collections\/(\d+)\/editions$/)) && req.method === 'POST') {
         return send(
           201,
-          store.createTask(project.id, {
-            text: body.text,
-            chapterId: body.chapter_id ? Number(body.chapter_id) : null
+          await run('collection.create_edition', { collection_id: x[1], ...(await readBody(req)) })
+        );
+      }
+      if ((x = m(/^\/api\/collections\/(\d+)\/editions\/(\d+)$/))) {
+        const input = { collection_id: x[1], edition_id: x[2] };
+        if (req.method === 'GET') return send(200, await run('collection.get_edition', input));
+        if (req.method === 'DELETE') {
+          return send(200, await run('collection.delete_edition', input));
+        }
+      }
+      if (
+        (x = m(/^\/api\/collections\/(\d+)\/editions\/(\d+)\/projects$/)) &&
+        req.method === 'PUT'
+      ) {
+        return send(
+          200,
+          await run('collection.set_edition_projects', {
+            collection_id: x[1],
+            edition_id: x[2],
+            ...(await readBody(req))
           })
         );
       }
-      if ((req.method === 'PATCH' || req.method === 'DELETE') && taskMatch) {
-        const task = store.getTask(Number(taskMatch[1]));
-        if (!task || task.project_id !== project.id) {
-          return send(404, { error: 'task not found' });
+      if ((x = m(/^\/api\/collections\/(\d+)\/export\/(epub|docx|pdf)$/)) && req.method === 'GET') {
+        return await streamExport('export.collection', {
+          collection_id: x[1],
+          format: x[2],
+          edition_id: url.searchParams.get('edition') || undefined
+        });
+      }
+
+      // Project-scoped
+      const scoped = m(/^\/api\/p\/(\d+)(\/.*)$/);
+      if (!scoped) return send(404, { error: 'not found' });
+      const project_id = scoped[1];
+      const route = scoped[2];
+      const r = pattern => route.match(pattern);
+
+      if (req.method === 'GET' && route === '/board') {
+        return send(200, await run('board.get', { project_id }));
+      }
+      if (req.method === 'POST' && route === '/scan') {
+        return send(200, await run('project.scan', { project_id }));
+      }
+      if (req.method === 'POST' && route === '/import') {
+        return send(200, await run('chapter.import', { project_id }));
+      }
+      if (req.method === 'POST' && route === '/chapters') {
+        return send(201, await run('chapter.create', { project_id, ...(await readBody(req)) }));
+      }
+      if ((x = r(/^\/chapters\/(\d+)$/))) {
+        const chapter_id = x[1];
+        if (req.method === 'PATCH') {
+          const body = await readBody(req);
+          const { stage, index, ...fields } = body;
+          let chapter = null;
+          if (Object.keys(fields).length > 0) {
+            chapter = await run('chapter.update', { project_id, chapter_id, ...fields });
+          }
+          if (stage !== undefined || index !== undefined) {
+            const current = ctx.store.getChapter(Number(chapter_id));
+            chapter = await run('chapter.move', {
+              project_id,
+              chapter_id,
+              stage: stage ?? current?.stage,
+              index
+            });
+          }
+          return send(200, chapter ?? ctx.store.getChapter(Number(chapter_id)));
         }
         if (req.method === 'DELETE') {
-          store.deleteTask(task.id);
-          return send(200, { deleted: true });
-        }
-        const body = await readBody(req);
-        return send(200, store.updateTask(task.id, body));
-      }
-
-      if (req.method === 'GET' && exportMatch) {
-        const format = exportMatch[1];
-        try {
-          let exportOptions = {};
-          const editionId = url.searchParams.get('edition');
-          if (editionId) {
-            const edition = store.getEdition(Number(editionId));
-            if (!edition || edition.project_id !== project.id) {
-              return send(404, { error: 'edition not found' });
-            }
-            const chapters = store.listEditionChapters(edition.id);
-            exportOptions = {
-              editionName: edition.name,
-              // Placeholder chapters without linked files are skipped
-              editionFiles: chapters.filter(c => c.file).map(c => path.join(project.path, c.file))
-            };
-          }
-          const filePath = await buildExport(project, format, exportOptions);
-          const data = await fs.readFile(filePath);
-          res.writeHead(200, {
-            'Content-Type': EXPORT_TYPES[format].mime,
-            'Content-Disposition': `attachment; filename="${path.basename(filePath)}"`
-          });
-          return res.end(data);
-        } catch (error) {
-          return send(500, { error: error.message });
+          return send(200, await run('chapter.delete', { project_id, chapter_id }));
         }
       }
-
-      if (req.method === 'GET' && route === '/metadata') {
-        const metadataPath = path.join(project.path, 'templates', 'metadata.yaml');
-        try {
-          return send(200, { content: await fs.readFile(metadataPath, 'utf8'), exists: true });
-        } catch {
-          return send(200, { content: '', exists: false });
-        }
+      if (req.method === 'GET' && route === '/tasks') {
+        return send(200, await run('task.list', { project_id }));
       }
-      if (req.method === 'PUT' && route === '/metadata') {
-        const body = await readBody(req);
-        if (typeof body.content !== 'string') {
-          return send(400, { error: 'content (string) is required' });
-        }
-        const templatesDir = path.join(project.path, 'templates');
-        await fs.mkdir(templatesDir, { recursive: true });
-        await fs.writeFile(path.join(templatesDir, 'metadata.yaml'), body.content, 'utf8');
-        return send(200, { saved: true });
+      if (req.method === 'POST' && route === '/tasks') {
+        return send(201, await run('task.create', { project_id, ...(await readBody(req)) }));
       }
-
-      if (req.method === 'POST' && route === '/chapters') {
-        const body = await readBody(req);
-        return send(201, store.createChapter(project.id, body));
-      }
-
-      if (req.method === 'PATCH' && chapterMatch) {
-        const id = Number(chapterMatch[1]);
-        const existing = store.getChapter(id);
-        if (!existing || existing.project_id !== project.id) {
-          return send(404, { error: 'chapter not found' });
-        }
-        const body = await readBody(req);
-        let chapter = store.updateChapter(id, body);
-        if (body.stage !== undefined || body.index !== undefined) {
-          chapter = store.moveChapter(id, body.stage ?? chapter.stage, body.index);
-        }
-        return send(200, chapter);
-      }
-
-      if (req.method === 'DELETE' && chapterMatch) {
-        const id = Number(chapterMatch[1]);
-        const existing = store.getChapter(id);
-        if (!existing || existing.project_id !== project.id) {
-          return send(404, { error: 'chapter not found' });
-        }
-        store.deleteChapter(id);
-        return send(200, { deleted: true });
-      }
-
-      if (req.method === 'POST' && route === '/import') {
-        const contentDir = path.join(project.path, 'content');
-        let files;
-        try {
-          files = filterExcludedFiles(await getAllMarkdownFiles(contentDir));
-        } catch {
-          return send(400, { error: 'no content/ directory in this project' });
-        }
-        const linked = store.linkedFiles(project.id);
-        const imported = [];
-        for (const file of files) {
-          const relative = path.relative(project.path, file);
-          if (linked.has(relative)) continue;
-          imported.push(
-            store.createChapter(project.id, {
-              title: await titleFromFile(file),
-              stage: 'drafting',
-              file: relative
-            })
+      if ((x = r(/^\/tasks\/(\d+)$/))) {
+        const task_id = x[1];
+        if (req.method === 'PATCH') {
+          return send(
+            200,
+            await run('task.update', { project_id, task_id, ...(await readBody(req)) })
           );
         }
-        return send(200, { imported: imported.length, chapters: imported });
+        if (req.method === 'DELETE') {
+          return send(200, await run('task.delete', { project_id, task_id }));
+        }
       }
-
       if (req.method === 'GET' && route === '/editions') {
-        return send(200, { editions: store.listEditions(project.id) });
+        return send(200, await run('edition.list', { project_id }));
       }
       if (req.method === 'POST' && route === '/editions') {
-        const body = await readBody(req);
-        return send(201, store.createEdition(project.id, body));
+        return send(201, await run('edition.create', { project_id, ...(await readBody(req)) }));
       }
-      if (editionChaptersMatch || editionMatch) {
-        const edition = store.getEdition(Number((editionChaptersMatch || editionMatch)[1]));
-        if (!edition || edition.project_id !== project.id) {
-          return send(404, { error: 'edition not found' });
+      if ((x = r(/^\/editions\/(\d+)\/chapters$/)) && req.method === 'PUT') {
+        return send(
+          200,
+          await run('edition.set_chapters', {
+            project_id,
+            edition_id: x[1],
+            ...(await readBody(req))
+          })
+        );
+      }
+      if ((x = r(/^\/editions\/(\d+)$/))) {
+        const edition_id = x[1];
+        if (req.method === 'GET') {
+          return send(200, await run('edition.get', { project_id, edition_id }));
         }
-        if (editionChaptersMatch && req.method === 'PUT') {
-          const body = await readBody(req);
-          if (!Array.isArray(body.chapter_ids)) {
-            return send(400, { error: 'chapter_ids (array) is required' });
-          }
-          return send(200, { chapters: store.setEditionChapters(edition.id, body.chapter_ids) });
+        if (req.method === 'PATCH') {
+          return send(
+            200,
+            await run('edition.update', { project_id, edition_id, ...(await readBody(req)) })
+          );
         }
-        if (editionMatch && req.method === 'GET') {
-          return send(200, { edition, chapters: store.listEditionChapters(edition.id) });
-        }
-        if (editionMatch && req.method === 'PATCH') {
-          const body = await readBody(req);
-          return send(200, store.updateEdition(edition.id, body));
-        }
-        if (editionMatch && req.method === 'DELETE') {
-          store.deleteEdition(edition.id);
-          return send(200, { deleted: true });
+        if (req.method === 'DELETE') {
+          return send(200, await run('edition.delete', { project_id, edition_id }));
         }
       }
-
-      if (req.method === 'GET' && route === '/ai-events') {
-        return send(200, { events: store.listAiEvents(project.id), purposes: AI_PURPOSES });
-      }
-
-      if (req.method === 'POST' && route === '/ai-events') {
-        const body = await readBody(req);
-        const provider = body.provider || (body.url && providerFromUrl(body.url));
-        if (!provider) {
-          return send(400, { error: 'provider required (or a claude.ai / chatgpt.com URL)' });
-        }
-        if (!AI_PURPOSES.includes(body.purpose)) {
-          return send(400, { error: `purpose must be one of: ${AI_PURPOSES.join(', ')}` });
-        }
-        if (body.purpose === 'prose-suggestion' && !body.justification) {
-          return send(400, { error: 'prose-suggestion requires a justification (AI policy)' });
-        }
-        let file = body.file || null;
-        if (body.chapter_id) {
-          const chapter = store.getChapter(Number(body.chapter_id));
-          if (!chapter || chapter.project_id !== project.id) {
-            return send(400, { error: 'unknown chapter' });
-          }
-          file = file || chapter.file;
-        }
-        const { event } = store.upsertAiEvent(project.id, {
-          sessionKey: body.url || `manual:${crypto.randomUUID()}`,
-          provider,
-          source: body.url ? 'chat-link' : 'manual',
-          url: body.url || null,
-          model: body.model || null,
-          chapterId: body.chapter_id ? Number(body.chapter_id) : null,
-          file,
-          purpose: body.purpose,
-          justification: body.justification || ''
+      if ((x = r(/^\/export\/(epub|docx|pdf)$/)) && req.method === 'GET') {
+        return await streamExport('export.project', {
+          project_id,
+          format: x[1],
+          edition_id: url.searchParams.get('edition') || undefined
         });
-        return send(201, event);
       }
-
-      if (req.method === 'DELETE' && aiMatch) {
-        const event = store.getAiEvent(Number(aiMatch[1]));
-        if (!event || event.project_id !== project.id) {
-          return send(404, { error: 'event not found' });
+      if (route === '/metadata') {
+        if (req.method === 'GET') return send(200, await run('metadata.get', { project_id }));
+        if (req.method === 'PUT') {
+          return send(200, await run('metadata.set', { project_id, ...(await readBody(req)) }));
         }
-        store.deleteAiEvent(event.id);
-        return send(200, { deleted: true });
       }
-
+      if (req.method === 'GET' && route === '/reviews') {
+        return send(200, await run('review.list', { project_id }));
+      }
+      if (req.method === 'POST' && route === '/reviews') {
+        return send(201, await run('review.create', { project_id, ...(await readBody(req)) }));
+      }
+      if ((x = r(/^\/reviews\/(\d+)$/)) && req.method === 'DELETE') {
+        return send(200, await run('review.delete', { project_id, review_id: x[1] }));
+      }
+      if (req.method === 'GET' && route === '/timeline') {
+        return send(
+          200,
+          await run('timeline.list', {
+            project_id,
+            chapter_id: url.searchParams.get('chapter') || undefined,
+            limit: url.searchParams.get('limit') || undefined
+          })
+        );
+      }
+      if (req.method === 'GET' && route === '/ai-events') {
+        return send(200, await run('ai.list_events', { project_id }));
+      }
+      if (req.method === 'POST' && route === '/ai-events') {
+        return send(201, await run('ai.log_event', { project_id, ...(await readBody(req)) }));
+      }
+      if ((x = r(/^\/ai-events\/(\d+)$/)) && req.method === 'DELETE') {
+        return send(200, await run('ai.delete_event', { project_id, event_id: x[1] }));
+      }
       if (req.method === 'POST' && route === '/ai-ingest') {
-        const result = await ingestClaudeCode(store, project.id, project.path);
-        return send(200, result);
+        return send(200, await run('ai.ingest_claude', { project_id }));
       }
 
       return send(404, { error: 'not found' });
     } catch (error) {
-      return send(400, { error: error.message });
+      const status = error instanceof OperationError ? error.status : 400;
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: error.message }));
     }
   });
 }
@@ -666,6 +364,7 @@ export async function serveCommand(options = {}) {
     console.log(chalk.blue.bold('\ndraftsync\n'));
     console.log(chalk.green(`✓ Serving all projects at http://localhost:${port}`));
     console.log(chalk.gray(`  Opening ${url}`));
+    console.log(chalk.gray(`  API: http://localhost:${port}/api/openapi.json`));
     console.log(chalk.gray(`  Data: ${path.join(getDataDir(), 'draftsync.db')}`));
     console.log(chalk.gray('  Press Ctrl+C to stop\n'));
     const opener =

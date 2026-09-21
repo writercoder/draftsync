@@ -283,6 +283,42 @@
         color: var(--muted);
         margin: 0.9rem 0 0.2rem;
       }
+      .card .words {
+        display: block;
+        color: var(--muted);
+        font-size: 0.7rem;
+        margin-top: 0.15rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .tl-item {
+        display: flex;
+        gap: 0.55rem;
+        align-items: baseline;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 0.85rem;
+      }
+      .tl-item .when {
+        color: var(--muted);
+        font-size: 0.72rem;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+      }
+      .tl-item .kind {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--accent);
+        white-space: nowrap;
+      }
+      .tl-item .what {
+        flex: 1;
+      }
+      .tl-scroll {
+        max-height: 22rem;
+        overflow-y: auto;
+      }
       .task-chip {
         display: inline-block;
         font-size: 0.68rem;
@@ -387,6 +423,8 @@
         <a id="dl-docx" download>DOCX</a>
         <a id="dl-pdf" download>PDF</a>
       </span>
+      <button id="timeline-open">Timeline</button>
+      <button id="reviews-open">Reviews</button>
       <button id="editions-open">Editions</button>
       <button id="meta-open">Metadata</button>
       <button id="ai-open">AI log</button>
@@ -414,6 +452,39 @@
         </div>
       </form>
       <div class="ai-list" id="ai-list"></div>
+    </dialog>
+
+    <dialog id="timeline-dialog">
+      <strong>Timeline</strong>
+      <div class="tl-scroll" id="tl-list"></div>
+      <div class="dialog-actions">
+        <span></span>
+        <button type="button" id="tl-close">Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="reviews-dialog">
+      <form id="review-form">
+        <strong>Reviews</strong>
+        <label for="rv-name">Reviewer name</label>
+        <input type="text" id="rv-name" required />
+        <label for="rv-email">Reviewer email</label>
+        <input type="text" id="rv-email" required />
+        <label for="rv-target">Of</label>
+        <select id="rv-target"></select>
+        <label for="rv-body">Received text (optional if attaching a file)</label>
+        <textarea id="rv-body"></textarea>
+        <label for="rv-file">Attach received file (optional)</label>
+        <input type="file" id="rv-file" />
+        <div class="dialog-actions">
+          <span></span>
+          <span>
+            <button type="button" id="rv-close">Close</button>
+            <button type="submit" class="primary">Record review</button>
+          </span>
+        </div>
+      </form>
+      <div class="ai-list" id="rv-list"></div>
     </dialog>
 
     <dialog id="editions-dialog">
@@ -552,6 +623,12 @@
               f.className = 'file';
               f.textContent = chapter.file;
               el.appendChild(f);
+            }
+            if (chapter.word_count != null && chapter.file) {
+              const w = document.createElement('span');
+              w.className = 'words';
+              w.textContent = `${chapter.word_count.toLocaleString()} words`;
+              el.appendChild(w);
             }
             if (chapter.gdocUrl) {
               const g = document.createElement('a');
@@ -946,7 +1023,144 @@
         .getElementById('ed-close')
         .addEventListener('click', () => document.getElementById('editions-dialog').close());
 
-      load();
+      const TYPE_LABELS = {
+        file_edited: 'file edited',
+        review_received: 'review',
+        task_created: 'task',
+        task_completed: 'task done',
+        chapter_created: 'chapter',
+        edition_created: 'edition'
+      };
+
+      const describeActivity = a => {
+        const d = a.data || {};
+        switch (a.type) {
+          case 'file_edited':
+            return `${a.chapterTitle || d.file} — +${d.linesAdded}/−${d.linesRemoved} lines, now ${d.wordCount} words`;
+          case 'review_received':
+            return (
+              `from ${d.reviewer}` +
+              (a.chapterTitle ? ` on ${a.chapterTitle}` : '') +
+              (d.hasFile ? ' (file attached)' : '')
+            );
+          case 'task_created':
+          case 'task_completed':
+            return d.text + (a.chapterTitle ? ` — ${a.chapterTitle}` : '');
+          case 'chapter_created':
+            return d.title + (d.imported ? ' (imported)' : '');
+          case 'edition_created':
+            return d.name;
+          default:
+            return JSON.stringify(d);
+        }
+      };
+
+      document.getElementById('timeline-open').addEventListener('click', async () => {
+        const { activities } = await api(`${base}/timeline`);
+        const list = document.getElementById('tl-list');
+        list.innerHTML = activities.length ? '' : '<div class="tl-item">Nothing yet.</div>';
+        for (const a of activities) {
+          const row = document.createElement('div');
+          row.className = 'tl-item';
+          const when = document.createElement('span');
+          when.className = 'when';
+          when.textContent = (a.created_at || '').slice(0, 16);
+          const kind = document.createElement('span');
+          kind.className = 'kind';
+          kind.textContent = TYPE_LABELS[a.type] || a.type;
+          const what = document.createElement('span');
+          what.className = 'what';
+          what.textContent = describeActivity(a);
+          row.append(when, kind, what);
+          list.appendChild(row);
+        }
+        document.getElementById('timeline-dialog').showModal();
+      });
+      document
+        .getElementById('tl-close')
+        .addEventListener('click', () => document.getElementById('timeline-dialog').close());
+
+      const renderReviews = async () => {
+        const { reviews } = await api(`${base}/reviews`);
+        const { editions } = await api(`${base}/editions`);
+        const target = document.getElementById('rv-target');
+        target.innerHTML =
+          state.chapters
+            .map(c => `<option value="c:${c.id}">Chapter: ${c.title}</option>`)
+            .join('') +
+          editions.map(e => `<option value="e:${e.id}">Edition: ${e.name}</option>`).join('');
+        const list = document.getElementById('rv-list');
+        list.innerHTML = '';
+        for (const rv of reviews) {
+          const div = document.createElement('div');
+          div.className = 'ai-event';
+          const head = document.createElement('div');
+          head.textContent = `${rv.reviewer_name} <${rv.reviewer_email}> — ${
+            rv.chapterTitle ? 'chapter: ' + rv.chapterTitle : 'edition: ' + rv.editionName
+          }`;
+          div.appendChild(head);
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent =
+            (rv.created_at || '').slice(0, 16) + (rv.file ? ` · file: ${rv.file}` : '');
+          div.appendChild(meta);
+          if (rv.body) {
+            const bodyEl = document.createElement('div');
+            bodyEl.className = 'just';
+            bodyEl.textContent = rv.body;
+            div.appendChild(bodyEl);
+          }
+          list.appendChild(div);
+        }
+      };
+
+      document.getElementById('reviews-open').addEventListener('click', async () => {
+        await renderReviews();
+        document.getElementById('reviews-dialog').showModal();
+      });
+      document
+        .getElementById('rv-close')
+        .addEventListener('click', () => document.getElementById('reviews-dialog').close());
+
+      document.getElementById('review-form').addEventListener('submit', async e => {
+        e.preventDefault();
+        const [kind, targetId] = document.getElementById('rv-target').value.split(':');
+        const payload = {
+          reviewer_name: document.getElementById('rv-name').value,
+          reviewer_email: document.getElementById('rv-email').value,
+          body: document.getElementById('rv-body').value || undefined
+        };
+        if (kind === 'c') payload.chapter_id = Number(targetId);
+        else payload.edition_id = Number(targetId);
+        const fileInput = document.getElementById('rv-file');
+        if (fileInput.files[0]) {
+          const file = fileInput.files[0];
+          payload.file_name = file.name;
+          payload.file_base64 = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result.split(',')[1]);
+            reader.readAsDataURL(file);
+          });
+        }
+        try {
+          await api(`${base}/reviews`, 'POST', payload);
+          document.getElementById('rv-body').value = '';
+          fileInput.value = '';
+          renderReviews();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
+      // Refresh file stats on page load, then render the board
+      (async () => {
+        try {
+          await api(`${base}/scan`, 'POST');
+        } catch {
+          /* board still renders without a scan */
+        }
+        load();
+      })();
     </script>
   </body>
 </html>

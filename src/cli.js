@@ -16,6 +16,8 @@ import { buildEpub, checkEpub } from './build/epub.js';
 import { buildDocx } from './build/docx.js';
 import { serveCommand } from './serve.js';
 import { openStore } from './store.js';
+import { execute, listOperations } from './core/registry.js';
+import './core/operations.js';
 import { AI_PURPOSES, providerFromUrl, ingestClaudeCode, buildAiReport } from './ai-audit.js';
 import { buildWeb } from './build/web.js';
 import { previewKdp } from './build/kdp.js';
@@ -446,6 +448,40 @@ async function aiReportCommand(options) {
 }
 
 /**
+ * Run any registry operation from the CLI: draftsync op <name> [json]
+ */
+async function opCommand(name, json, options) {
+  if (options.list || !name) {
+    console.log(chalk.blue.bold('\nOperations\n'));
+    for (const op of listOperations()) {
+      console.log(`  ${chalk.cyan(op.name.padEnd(32))} ${chalk.gray(op.description)}`);
+    }
+    console.log(chalk.gray('\nRun: draftsync op <name> \'{"project_id": 1, ...}\''));
+    return;
+  }
+  let input = {};
+  if (json) {
+    try {
+      input = JSON.parse(json);
+    } catch {
+      console.error(chalk.red('✗ Input must be valid JSON'));
+      process.exitCode = 1;
+      return;
+    }
+  }
+  const store = openStore();
+  try {
+    const result = await execute(name, { store }, input);
+    console.log(JSON.stringify(result, null, 2));
+  } catch (error) {
+    console.error(chalk.red(`✗ ${error.message}`));
+    process.exitCode = 1;
+  } finally {
+    store.close();
+  }
+}
+
+/**
  * Main CLI entry point
  */
 export function run() {
@@ -530,6 +566,14 @@ export function run() {
     .description('Build static HTML from Markdown files')
     .option('-o, --output <dir>', 'Output directory', 'dist/web')
     .action(buildWeb);
+
+  program
+    .command('op')
+    .description('Run any draftsync operation (the full API, from the CLI)')
+    .argument('[name]', 'Operation name, e.g. chapter.create')
+    .argument('[json]', 'JSON input for the operation')
+    .option('-l, --list', 'List all operations')
+    .action(opCommand);
 
   program
     .command('serve')
