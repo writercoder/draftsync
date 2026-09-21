@@ -226,3 +226,13 @@ a.menu-item {
   border-top: 1px solid var(--ink-faint);
   margin: 0.3rem 0;
 }
+.menu-item.with-count {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.menu-item .count {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
