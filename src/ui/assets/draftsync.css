@@ -164,3 +164,65 @@ dialog label {
   color: var(--ink-soft);
   font-size: 0.75rem;
 }
+
+/* Dropdown menus — PM infrastructure */
+.menu {
+  position: relative;
+}
+.menu-list {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  background: var(--paper-raised);
+  border: 1px solid var(--ink-faint);
+  border-radius: var(--radius);
+  min-width: 220px;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.12);
+  padding: 0.3rem;
+  z-index: 50;
+  display: none;
+}
+.menu.open .menu-list {
+  display: block;
+}
+.menu-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.6rem;
+  width: 100%;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  background: none;
+  border: none;
+  padding: 0.45rem 0.6rem 0.25rem;
+  border-radius: 4px;
+  text-align: left;
+}
+.menu-head:hover {
+  color: var(--infra);
+  border: none;
+}
+.menu-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 0.4rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.88rem;
+  color: var(--ink);
+}
+.menu-item:hover {
+  background: var(--paper-sunken);
+  border: none;
+}
+a.menu-item {
+  text-decoration: none;
+}
+.menu-sep {
+  border-top: 1px solid var(--ink-faint);
+  margin: 0.3rem 0;
+}

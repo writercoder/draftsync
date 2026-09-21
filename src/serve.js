@@ -324,6 +324,15 @@ export function createDraftsyncServer({ store }) {
       if ((x = r(/^\/reviews\/(\d+)$/)) && req.method === 'DELETE') {
         return send(200, await run('review.delete', { project_id, review_id: x[1] }));
       }
+      if (req.method === 'GET' && route === '/activity') {
+        return send(
+          200,
+          await run('activity.stream', {
+            project_id,
+            limit: url.searchParams.get('limit') || undefined
+          })
+        );
+      }
       if (req.method === 'GET' && route === '/timeline') {
         return send(
           200,

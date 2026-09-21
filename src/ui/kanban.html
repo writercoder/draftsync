@@ -21,21 +21,102 @@
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .downloads {
+
+      .layout {
+        flex: 1;
+        display: flex;
+        overflow: hidden;
+        min-height: 0;
+      }
+      .apanel {
+        width: 330px;
+        flex: none;
+        border-left: 1px solid var(--ink-faint);
+        background: var(--paper-raised);
+        display: none;
+        flex-direction: column;
+        min-height: 0;
+      }
+      body.panel-open .apanel {
+        display: flex;
+      }
+      body.panel-open #panel-toggle {
+        border-color: var(--infra);
+        color: var(--infra);
+      }
+      .apanel-head {
+        display: flex;
+        gap: 0.35rem;
+        padding: 0.7rem 0.9rem;
+        border-bottom: 1px solid var(--ink-faint);
+        flex-wrap: wrap;
+      }
+      .chipbtn {
+        font-size: 0.72rem;
+        font-weight: 600;
+        border-radius: 999px;
+        padding: 0.1rem 0.6rem;
+        color: var(--ink-soft);
+      }
+      .chipbtn.active {
+        color: var(--infra);
+        border-color: var(--infra);
+      }
+      .chipbtn.ai.active {
+        color: var(--ai-pink);
+        border-color: var(--ai-pink);
+        background: var(--ai-wash);
+      }
+      .apanel-actions {
+        display: flex;
+        gap: 0.4rem;
+        padding: 0.5rem 0.9rem;
+        border-bottom: 1px solid var(--ink-faint);
+        flex-wrap: wrap;
+      }
+      .apanel-actions button {
+        font-size: 0.75rem;
+        padding: 0.2rem 0.55rem;
+      }
+      .apanel-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 0.4rem 0.9rem 1rem;
+      }
+      .st-item {
         display: flex;
         gap: 0.5rem;
-        border: 1px solid var(--ink-faint);
-        border-radius: var(--radius);
-        padding: 0.3rem 0.7rem;
-      }
-      .downloads a {
+        align-items: baseline;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--ink-faint);
         font-size: 0.82rem;
-        text-decoration: none;
       }
-      .downloads::before {
-        content: 'Download:';
+      .st-item .when {
         color: var(--ink-soft);
-        font-size: 0.82rem;
+        font-size: 0.68rem;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        font-family: var(--font-mono);
+      }
+      .st-item .kind {
+        font-size: 0.65rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--infra);
+        white-space: nowrap;
+      }
+      .st-item .kind.ai {
+        color: var(--ai-pink);
+      }
+      .st-item .what {
+        flex: 1;
+      }
+      .st-item .ok {
+        color: var(--ai-green);
+      }
+      .st-item .warn {
+        color: var(--ai-orange);
       }
 
       /* Board — PM infrastructure */
@@ -175,37 +256,6 @@
         margin-top: 0.25rem;
       }
 
-      /* Timeline */
-      .tl-item {
-        display: flex;
-        gap: 0.55rem;
-        align-items: baseline;
-        padding: 0.35rem 0;
-        border-bottom: 1px solid var(--ink-faint);
-        font-size: 0.85rem;
-      }
-      .tl-item .when {
-        color: var(--ink-soft);
-        font-size: 0.72rem;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-      }
-      .tl-item .kind {
-        font-size: 0.68rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: var(--infra);
-        white-space: nowrap;
-      }
-      .tl-item .what {
-        flex: 1;
-      }
-      .tl-scroll {
-        max-height: 22rem;
-        overflow-y: auto;
-      }
-
       /* Editions dialog */
       .ed-row {
         display: flex;
@@ -315,26 +365,65 @@
   </head>
   <body>
     <header>
-      <a href="/" style="font-size: 0.82rem">← Projects</a>
+      <a href="/">← Projects</a>
       <h1>
         <img class="logo" src="/assets/heron.svg" alt="" />
         <span id="project-name">draftsync board</span>
       </h1>
       <span class="path" id="project-path"></span>
-      <a id="drive-link" href="#" target="_blank" style="display: none">Drive folder ↗</a>
-      <span class="downloads">
-        <a id="dl-epub" download>EPUB</a>
-        <a id="dl-docx" download>DOCX</a>
-        <a id="dl-pdf" download>PDF</a>
-      </span>
-      <button id="timeline-open">Timeline</button>
-      <button id="reviews-open">Reviews</button>
-      <button id="editions-open">Editions</button>
-      <button id="meta-open">Metadata</button>
-      <button id="ai-open">AI log</button>
-      <button id="import">Import chapters</button>
+      <div class="menu" id="dl-menu">
+        <button>Download ▾</button>
+        <div class="menu-list">
+          <a class="menu-item" id="dl-epub" download>EPUB</a>
+          <a class="menu-item" id="dl-docx" download>DOCX</a>
+          <a class="menu-item" id="dl-pdf" download>PDF</a>
+          <div class="menu-sep"></div>
+          <button class="menu-item" id="dl-editions">Edition builds… (Editions)</button>
+        </div>
+      </div>
+      <div class="menu" id="actions-menu">
+        <button>Actions ▾</button>
+        <div class="menu-list">
+          <button class="menu-head" id="am-reviews-head">
+            <span>Reviews</span><span id="am-reviews-count"></span>
+          </button>
+          <button class="menu-item" id="am-send">Send for review</button>
+          <button class="menu-item" id="am-record">Record review</button>
+          <div class="menu-sep"></div>
+          <button class="menu-head" id="am-editions-head">
+            <span>Editions</span><span id="am-editions-count"></span>
+          </button>
+          <button class="menu-item" id="am-new-edition">New edition</button>
+          <div class="menu-sep"></div>
+          <div class="menu-head"><span>Project settings</span></div>
+          <button class="menu-item" id="am-metadata">Metadata</button>
+          <button class="menu-item" id="am-import">Import chapters</button>
+          <button class="menu-item" id="am-ai">Log AI usage</button>
+          <a class="menu-item" id="am-drive" target="_blank" style="display: none"
+            >Drive folder ↗</a
+          >
+        </div>
+      </div>
+      <button id="panel-toggle">◨ Activity</button>
     </header>
-    <div class="board" id="board"></div>
+    <div class="layout">
+      <div class="board" id="board"></div>
+      <aside class="apanel" id="apanel">
+        <div class="apanel-head">
+          <button class="chipbtn active" data-cat="all">All</button>
+          <button class="chipbtn" data-cat="files">Files</button>
+          <button class="chipbtn" data-cat="reviews">Reviews</button>
+          <button class="chipbtn" data-cat="tasks">Tasks</button>
+          <button class="chipbtn ai" data-cat="ai">AI</button>
+        </div>
+        <div class="apanel-actions">
+          <button id="ap-send">＋ Send for review</button>
+          <button id="ap-record">＋ Record review</button>
+          <button id="ap-ai">＋ Log AI</button>
+        </div>
+        <div class="apanel-list" id="apanel-list"></div>
+      </aside>
+    </div>
 
     <dialog id="ai-dialog">
       <form id="ai-form">
@@ -356,15 +445,6 @@
         </div>
       </form>
       <div class="ai-list" id="ai-list"></div>
-    </dialog>
-
-    <dialog id="timeline-dialog">
-      <strong>Timeline</strong>
-      <div class="tl-scroll" id="tl-list"></div>
-      <div class="dialog-actions">
-        <span></span>
-        <button type="button" id="tl-close">Close</button>
-      </div>
     </dialog>
 
     <dialog id="reviews-dialog">
@@ -481,8 +561,7 @@
         document.getElementById('project-name').textContent = board.project.name;
         document.getElementById('project-path').textContent = board.project.path;
         document.title = board.project.name + ' · draftsync board';
-        document.getElementById('ai-open').textContent = `AI log (${board.ai.total})`;
-        const drive = document.getElementById('drive-link');
+        const drive = document.getElementById('am-drive');
         if (board.project.driveFolderUrl) {
           drive.href = board.project.driveFolderUrl;
           drive.style.display = '';
@@ -676,11 +755,11 @@
         load();
       });
 
-      document.getElementById('meta-open').addEventListener('click', async () => {
+      const openMetadata = async () => {
         const meta = await api(`${base}/metadata`);
         document.getElementById('meta-content').value = meta.content;
         document.getElementById('meta-dialog').showModal();
-      });
+      };
       document
         .getElementById('meta-cancel')
         .addEventListener('click', () => document.getElementById('meta-dialog').close());
@@ -709,7 +788,7 @@
         document.getElementById('editor').close();
         load();
       });
-      document.getElementById('import').addEventListener('click', async () => {
+      const doImport = async () => {
         try {
           const result = await api(`${base}/import`, 'POST');
           if (result.imported === 0) alert('Nothing new to import from content/.');
@@ -717,7 +796,7 @@
         } catch (e) {
           alert(e.message);
         }
-      });
+      };
 
       const renderAiDialog = async () => {
         const { events, purposes } = await api(`${base}/ai-events`);
@@ -775,10 +854,10 @@
         }
       };
 
-      document.getElementById('ai-open').addEventListener('click', async () => {
+      const openAi = async () => {
         await renderAiDialog();
         document.getElementById('ai-dialog').showModal();
-      });
+      };
       document
         .getElementById('ai-close')
         .addEventListener('click', () => document.getElementById('ai-dialog').close());
@@ -896,10 +975,11 @@
         }
       };
 
-      document.getElementById('editions-open').addEventListener('click', async () => {
+      const openEditions = async newFirst => {
         await renderEditions();
         document.getElementById('editions-dialog').showModal();
-      });
+        if (newFirst) document.getElementById('ed-new').click();
+      };
       document.getElementById('ed-select').addEventListener('change', e => {
         currentEdition = Number(e.target.value) || null;
         document.getElementById('ed-body').style.display = currentEdition ? '' : 'none';
@@ -966,31 +1046,6 @@
             return JSON.stringify(d);
         }
       };
-
-      document.getElementById('timeline-open').addEventListener('click', async () => {
-        const { activities } = await api(`${base}/timeline`);
-        const list = document.getElementById('tl-list');
-        list.innerHTML = activities.length ? '' : '<div class="tl-item">Nothing yet.</div>';
-        for (const a of activities) {
-          const row = document.createElement('div');
-          row.className = 'tl-item';
-          const when = document.createElement('span');
-          when.className = 'when';
-          when.textContent = (a.created_at || '').slice(0, 16);
-          const kind = document.createElement('span');
-          kind.className = 'kind';
-          kind.textContent = TYPE_LABELS[a.type] || a.type;
-          const what = document.createElement('span');
-          what.className = 'what';
-          what.textContent = describeActivity(a);
-          row.append(when, kind, what);
-          list.appendChild(row);
-        }
-        document.getElementById('timeline-dialog').showModal();
-      });
-      document
-        .getElementById('tl-close')
-        .addEventListener('click', () => document.getElementById('timeline-dialog').close());
 
       const renderReviews = async () => {
         const { reviews } = await api(`${base}/reviews`);
@@ -1063,10 +1118,11 @@
         }
       });
 
-      document.getElementById('reviews-open').addEventListener('click', async () => {
+      const openReviews = async focusField => {
         await renderReviews();
         document.getElementById('reviews-dialog').showModal();
-      });
+        if (focusField) document.getElementById(focusField).focus();
+      };
       document
         .getElementById('rv-close')
         .addEventListener('click', () => document.getElementById('reviews-dialog').close());
@@ -1102,6 +1158,143 @@
         }
       });
 
+      /* ----- dropdown menus ----- */
+      for (const menu of document.querySelectorAll('.menu')) {
+        menu.querySelector(':scope > button').addEventListener('click', e => {
+          e.stopPropagation();
+          const was = menu.classList.contains('open');
+          document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'));
+          if (!was) menu.classList.add('open');
+        });
+      }
+      document.addEventListener('click', () =>
+        document.querySelectorAll('.menu.open').forEach(m => m.classList.remove('open'))
+      );
+
+      const refreshMenuCounts = async () => {
+        const [{ reviews }, { editions }] = await Promise.all([
+          api(`${base}/reviews`),
+          api(`${base}/editions`)
+        ]);
+        const awaiting = reviews.filter(r => r.status === 'sent').length;
+        document.getElementById('am-reviews-count').textContent =
+          awaiting > 0 ? `${awaiting} awaiting` : `${reviews.length}`;
+        document.getElementById('am-editions-count').textContent = editions.length;
+      };
+
+      document
+        .getElementById('am-reviews-head')
+        .addEventListener('click', () => setPanel('reviews', true));
+      document.getElementById('am-send').addEventListener('click', () => openReviews('rv-name'));
+      document.getElementById('am-record').addEventListener('click', () => openReviews('rv-body'));
+      document
+        .getElementById('am-editions-head')
+        .addEventListener('click', () => openEditions(false));
+      document.getElementById('am-new-edition').addEventListener('click', () => openEditions(true));
+      document.getElementById('am-metadata').addEventListener('click', openMetadata);
+      document.getElementById('am-import').addEventListener('click', doImport);
+      document.getElementById('am-ai').addEventListener('click', openAi);
+      document.getElementById('dl-editions').addEventListener('click', () => openEditions(false));
+
+      /* ----- activity panel ----- */
+      const CAT = {
+        file_edited: 'files',
+        chapter_created: 'files',
+        edition_created: 'files',
+        review_sent: 'reviews',
+        review_received: 'reviews',
+        task_created: 'tasks',
+        task_completed: 'tasks',
+        ai_event: 'ai'
+      };
+      let panelCat = 'all';
+      let streamRows = [];
+
+      const describeStreamRow = row => {
+        if (row.kind !== 'ai_event') {
+          return describeActivity({
+            type: row.kind,
+            data: row.data,
+            chapterTitle: row.chapterTitle
+          });
+        }
+        const d = row.data;
+        let text = `${d.purpose} — ${d.provider} (${d.source})`;
+        if (row.chapterTitle) text += ` · ${row.chapterTitle}`;
+        return text;
+      };
+
+      const renderStream = () => {
+        const list = document.getElementById('apanel-list');
+        list.innerHTML = '';
+        const rows = streamRows.filter(r => panelCat === 'all' || CAT[r.kind] === panelCat);
+        if (rows.length === 0) {
+          list.innerHTML = '<div class="st-item"><span class="what">Nothing here yet.</span></div>';
+          return;
+        }
+        for (const row of rows) {
+          const item = document.createElement('div');
+          item.className = 'st-item';
+          const when = document.createElement('span');
+          when.className = 'when';
+          when.textContent = String(row.at || '')
+            .replace('T', ' ')
+            .slice(5, 16);
+          const kind = document.createElement('span');
+          kind.className = 'kind' + (CAT[row.kind] === 'ai' ? ' ai' : '');
+          kind.textContent = row.kind === 'ai_event' ? 'ai' : TYPE_LABELS[row.kind] || row.kind;
+          const what = document.createElement('span');
+          what.className = 'what';
+          what.textContent = describeStreamRow(row);
+          if (row.kind === 'ai_event') {
+            const mark = document.createElement('span');
+            if (row.data.purpose === 'prose-suggestion' && !row.data.justification) {
+              mark.className = 'warn';
+              mark.textContent = ' ⚠';
+            } else if (row.data.justification) {
+              mark.className = 'ok';
+              mark.textContent = ' ✓';
+            }
+            what.appendChild(mark);
+          }
+          item.append(when, kind, what);
+          list.appendChild(item);
+        }
+      };
+
+      const loadStream = async () => {
+        streamRows = (await api(`${base}/activity`)).stream;
+        renderStream();
+      };
+
+      const setPanel = (cat, open) => {
+        panelCat = cat;
+        for (const chip of document.querySelectorAll('.chipbtn')) {
+          chip.classList.toggle('active', chip.dataset.cat === cat);
+        }
+        if (open) {
+          document.body.classList.add('panel-open');
+          localStorage.setItem('draftsync-panel', '1');
+        }
+        loadStream();
+      };
+
+      for (const chip of document.querySelectorAll('.chipbtn')) {
+        chip.addEventListener('click', () => setPanel(chip.dataset.cat, true));
+      }
+      document.getElementById('panel-toggle').addEventListener('click', () => {
+        const open = document.body.classList.toggle('panel-open');
+        localStorage.setItem('draftsync-panel', open ? '1' : '');
+        if (open) loadStream();
+      });
+      document.getElementById('ap-send').addEventListener('click', () => openReviews('rv-name'));
+      document.getElementById('ap-record').addEventListener('click', () => openReviews('rv-body'));
+      document.getElementById('ap-ai').addEventListener('click', openAi);
+      if (localStorage.getItem('draftsync-panel')) {
+        document.body.classList.add('panel-open');
+        loadStream();
+      }
+
       // Refresh file stats on page load, then render the board
       (async () => {
         try {
@@ -1110,6 +1303,8 @@
           /* board still renders without a scan */
         }
         load();
+        refreshMenuCounts();
+        if (document.body.classList.contains('panel-open')) loadStream();
       })();
     </script>
   </body>

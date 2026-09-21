@@ -741,6 +741,45 @@ defineOperation({
   }
 });
 
+defineOperation({
+  name: 'activity.stream',
+  description:
+    'Unified time-ordered stream for a project: timeline activities plus AI ledger events, newest first — the single feed behind the activity panel',
+  input: z.object({
+    project_id: id,
+    limit: z.coerce.number().int().min(1).max(500).optional()
+  }),
+  handler: ({ store }, { project_id, limit = 100 }) => {
+    const project = projectOf(store, project_id);
+    const titles = new Map(store.listChapters(project.id).map(c => [c.id, c.title]));
+    const activities = store.listActivities(project.id, { limit }).map(a => ({
+      kind: a.type,
+      at: a.created_at,
+      chapter_id: a.chapter_id,
+      chapterTitle: a.chapterTitle,
+      data: a.data
+    }));
+    const aiEvents = store.listAiEvents(project.id).map(e => ({
+      kind: 'ai_event',
+      at: e.occurred_at || e.created_at,
+      chapter_id: e.chapter_id,
+      chapterTitle: e.chapter_id ? (titles.get(e.chapter_id) ?? null) : null,
+      data: {
+        provider: e.provider,
+        source: e.source,
+        purpose: e.purpose,
+        model: e.model,
+        url: e.url,
+        justification: e.justification
+      }
+    }));
+    const stream = [...activities, ...aiEvents]
+      .sort((x, y) => String(y.at ?? '').localeCompare(String(x.at ?? '')))
+      .slice(0, limit);
+    return { stream };
+  }
+});
+
 /* ------------------------------- AI events ------------------------------- */
 
 defineOperation({

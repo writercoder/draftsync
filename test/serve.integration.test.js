@@ -452,6 +452,30 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('activity stream', () => {
+    it('should merge activities and AI events, newest first', async () => {
+      const chapter = await api(`${p}/chapters`, 'POST', { title: 'Ch S' });
+      await api(`${p}/tasks`, 'POST', { text: 'a task', chapter_id: chapter.body.id });
+      await api(`${p}/ai-events`, 'POST', {
+        url: 'https://claude.ai/chat/stream-test',
+        purpose: 'critique',
+        justification: 'test'
+      });
+
+      const { status, body } = await api(`${p}/activity`);
+      expect(status).toBe(200);
+      const kinds = body.stream.map(r => r.kind);
+      expect(kinds).toContain('chapter_created');
+      expect(kinds).toContain('task_created');
+      expect(kinds).toContain('ai_event');
+      const ai = body.stream.find(r => r.kind === 'ai_event');
+      expect(ai.data.provider).toBe('anthropic');
+      // Newest first
+      const times = body.stream.map(r => String(r.at));
+      expect([...times].sort().reverse()).toEqual(times);
+    });
+  });
+
   describe('metadata', () => {
     it('should round-trip metadata.yaml through the API', async () => {
       const before = await api(`${p}/metadata`);
