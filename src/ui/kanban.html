@@ -419,6 +419,11 @@
       <div class="menu" id="actions-menu">
         <button>Actions ▾</button>
         <div class="menu-list">
+          <button class="menu-item with-count" id="am-tasks-head">
+            <span>Tasks</span><span class="count" id="am-tasks-count"></span>
+          </button>
+          <button class="menu-item" id="am-create-task">Create task</button>
+          <div class="menu-sep"></div>
           <button class="menu-item with-count" id="am-reviews-head">
             <span>Reviews</span><span class="count" id="am-reviews-count"></span>
           </button>
@@ -1207,16 +1212,27 @@
       );
 
       const refreshMenuCounts = async () => {
-        const [{ reviews }, { editions }] = await Promise.all([
+        const [{ reviews }, { editions }, { tasks }] = await Promise.all([
           api(`${base}/reviews`),
-          api(`${base}/editions`)
+          api(`${base}/editions`),
+          api(`${base}/tasks`)
         ]);
         const awaiting = reviews.filter(r => r.status === 'sent').length;
         document.getElementById('am-reviews-count').textContent =
           awaiting > 0 ? `${awaiting} awaiting` : `${reviews.length}`;
         document.getElementById('am-editions-count').textContent = editions.length;
+        const openTasks = tasks.filter(t => !t.done).length;
+        document.getElementById('am-tasks-count').textContent =
+          openTasks > 0 ? `${openTasks} open` : `${tasks.length}`;
       };
 
+      document
+        .getElementById('am-tasks-head')
+        .addEventListener('click', () => setPanel('tasks', true));
+      document.getElementById('am-create-task').addEventListener('click', () => {
+        setPanel('tasks', true);
+        setTimeout(() => document.querySelector('.ptask-add')?.focus(), 350);
+      });
       document
         .getElementById('am-reviews-head')
         .addEventListener('click', () => setPanel('reviews', true));
