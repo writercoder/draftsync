@@ -1,0 +1,14 @@
+---
+title: 'Pride and Prejudice'
+subtitle: 'Opening Chapters'
+author:
+  - 'Jane Austen'
+publisher: 'draftsync example'
+rights: 'Public domain. Text via Project Gutenberg (ebook #1342).'
+language: en-GB
+description: |
+  The first two chapters of Pride and Prejudice (1813).
+date: '1813-01-28'
+toc: true
+toc-depth: 2
+number-sections: false

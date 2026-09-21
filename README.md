@@ -232,6 +232,10 @@ On a project board:
   (PDF needs a Pandoc PDF engine such as BasicTeX)
 - The **Metadata** button edits the project's `templates/metadata.yaml`
   in place — the file stays the source of truth for builds
+- The **Editions** button models the final work as an ordered selection
+  of chapters — a chapter can belong to any number of editions, each
+  with its own order. Editions get their own download buttons, and the
+  CLI builds them too: `draftsync build:epub --edition "Reader's Edition"`
 
 ### AI Auditability
 

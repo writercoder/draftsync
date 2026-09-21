@@ -181,6 +181,52 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('editions', () => {
+    it('should manage editions and build an edition-scoped export', async () => {
+      await api(`${p}/import`, 'POST');
+      const board = await api(`${p}/board`);
+      const opening = board.body.cards.find(c => c.file === 'content/01-opening.md');
+      const middle = board.body.cards.find(c => c.file === 'content/02-middle.md');
+      const placeholder = await api(`${p}/cards`, 'POST', { title: 'Planned chapter' });
+
+      const edition = await api(`${p}/editions`, 'POST', {
+        name: "Reader's Edition",
+        description: 'Just the opening'
+      });
+      expect(edition.status).toBe(201);
+
+      const set = await api(`${p}/editions/${edition.body.id}/chapters`, 'PUT', {
+        card_ids: [middle.id, opening.id, placeholder.body.id]
+      });
+      expect(set.body.chapters.map(c => c.title)).toEqual([
+        '02-middle',
+        'The Opening',
+        'Planned chapter'
+      ]);
+
+      // Edition export uses edition order; the placeholder (no file) is skipped
+      const res = await fetch(`${base}${p}/export/docx?edition=${edition.body.id}`);
+      expect(res.status).toBe(200);
+      expect(res.headers.get('content-disposition')).toContain("my-novel - Reader's Edition");
+
+      const renamed = await api(`${p}/editions/${edition.body.id}`, 'PATCH', { name: 'RE' });
+      expect(renamed.body.name).toBe('RE');
+
+      const removed = await api(`${p}/editions/${edition.body.id}`, 'DELETE');
+      expect(removed.body.deleted).toBe(true);
+      expect((await api(`${p}/export/docx?edition=${edition.body.id}`)).status).toBe(404);
+    });
+
+    it('should reject invalid membership payloads and empty-file editions', async () => {
+      const edition = await api(`${p}/editions`, 'POST', { name: 'Empty' });
+      expect(
+        (await api(`${p}/editions/${edition.body.id}/chapters`, 'PUT', { card_ids: 'nope' })).status
+      ).toBe(400);
+      expect((await api(`${p}/export/epub?edition=${edition.body.id}`)).status).toBe(500);
+      expect((await api(`${p}/editions`, 'POST', { name: 'Empty' })).status).toBe(400);
+    });
+  });
+
   describe('metadata', () => {
     it('should round-trip metadata.yaml through the API', async () => {
       const before = await api(`${p}/metadata`);

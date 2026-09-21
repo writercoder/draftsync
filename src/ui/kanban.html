@@ -235,6 +235,54 @@
       .card .gdoc:hover {
         text-decoration: underline;
       }
+      .ed-row {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.28rem 0;
+        border-bottom: 1px solid var(--line);
+        font-size: 0.9rem;
+      }
+      .ed-row span.t {
+        flex: 1;
+      }
+      .ed-row.excluded span.t {
+        color: var(--muted);
+      }
+      .ed-row .nofile {
+        color: var(--muted);
+        font-size: 0.72rem;
+        font-style: italic;
+      }
+      .ed-row button {
+        font-size: 0.72rem;
+        padding: 0.05rem 0.45rem;
+      }
+      .ed-head {
+        display: flex;
+        gap: 0.5rem;
+        align-items: center;
+        margin-bottom: 0.4rem;
+      }
+      .ed-head select {
+        flex: 1;
+      }
+      .ed-downloads {
+        display: flex;
+        gap: 0.6rem;
+        margin: 0.6rem 0 0.2rem;
+        font-size: 0.85rem;
+      }
+      .ed-downloads a {
+        color: var(--accent);
+      }
+      .ed-section {
+        font-size: 0.72rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--muted);
+        margin: 0.9rem 0 0.2rem;
+      }
       .task-chip {
         display: inline-block;
         font-size: 0.68rem;
@@ -339,6 +387,7 @@
         <a id="dl-docx" download>DOCX</a>
         <a id="dl-pdf" download>PDF</a>
       </span>
+      <button id="editions-open">Editions</button>
       <button id="meta-open">Metadata</button>
       <button id="ai-open">AI log</button>
       <button id="import">Import chapters</button>
@@ -365,6 +414,32 @@
         </div>
       </form>
       <div class="ai-list" id="ai-list"></div>
+    </dialog>
+
+    <dialog id="editions-dialog">
+      <strong>Editions</strong>
+      <div class="ed-head">
+        <select id="ed-select"></select>
+        <button id="ed-new">New</button>
+        <button id="ed-rename">Rename</button>
+        <button id="ed-delete" class="danger">Delete</button>
+      </div>
+      <div id="ed-body" style="display: none">
+        <div class="ed-downloads">
+          <span style="color: var(--muted)">Download this edition:</span>
+          <a id="ed-dl-epub" download>EPUB</a>
+          <a id="ed-dl-docx" download>DOCX</a>
+          <a id="ed-dl-pdf" download>PDF</a>
+        </div>
+        <div class="ed-section">Included, in order</div>
+        <div id="ed-included"></div>
+        <div class="ed-section">Available chapters</div>
+        <div id="ed-available"></div>
+      </div>
+      <div class="dialog-actions">
+        <span></span>
+        <button type="button" id="ed-close">Close</button>
+      </div>
     </dialog>
 
     <dialog id="meta-dialog">
@@ -748,6 +823,128 @@
         renderAiDialog();
         load();
       });
+
+      let currentEdition = null;
+
+      const renderEditions = async keepId => {
+        const { editions } = await api(`${base}/editions`);
+        const sel = document.getElementById('ed-select');
+        sel.innerHTML = editions.length
+          ? editions
+              .map(e => `<option value="${e.id}">${e.name} (${e.chapterCount})</option>`)
+              .join('')
+          : '<option value="">No editions yet — create one</option>';
+        if (keepId && editions.some(e => e.id === keepId)) sel.value = keepId;
+        currentEdition = Number(sel.value) || null;
+        document.getElementById('ed-body').style.display = currentEdition ? '' : 'none';
+        if (currentEdition) renderEditionDetail();
+      };
+
+      const renderEditionDetail = async () => {
+        const { chapters } = await api(`${base}/editions/${currentEdition}`);
+        for (const fmt of ['epub', 'docx', 'pdf']) {
+          document.getElementById(`ed-dl-${fmt}`).href =
+            `${base}/export/${fmt}?edition=${currentEdition}`;
+        }
+        const ids = chapters.map(c => c.id);
+        const setChapters = async newIds => {
+          await api(`${base}/editions/${currentEdition}/chapters`, 'PUT', { card_ids: newIds });
+          renderEditions(currentEdition);
+        };
+
+        const included = document.getElementById('ed-included');
+        included.innerHTML = '';
+        chapters.forEach((c, i) => {
+          const row = document.createElement('div');
+          row.className = 'ed-row';
+          const up = document.createElement('button');
+          up.textContent = '▲';
+          up.disabled = i === 0;
+          up.addEventListener('click', () => {
+            const next = [...ids];
+            [next[i - 1], next[i]] = [next[i], next[i - 1]];
+            setChapters(next);
+          });
+          const down = document.createElement('button');
+          down.textContent = '▼';
+          down.disabled = i === ids.length - 1;
+          down.addEventListener('click', () => {
+            const next = [...ids];
+            [next[i], next[i + 1]] = [next[i + 1], next[i]];
+            setChapters(next);
+          });
+          const t = document.createElement('span');
+          t.className = 't';
+          t.textContent = `${i + 1}. ${c.title}`;
+          row.append(up, down, t);
+          if (!c.file) {
+            const nf = document.createElement('span');
+            nf.className = 'nofile';
+            nf.textContent = 'no file — skipped in builds';
+            row.appendChild(nf);
+          }
+          const rm = document.createElement('button');
+          rm.textContent = '×';
+          rm.addEventListener('click', () => setChapters(ids.filter(x => x !== c.id)));
+          row.appendChild(rm);
+          included.appendChild(row);
+        });
+        if (chapters.length === 0) {
+          included.innerHTML =
+            '<div class="ed-row excluded"><span class="t">Empty — add chapters below</span></div>';
+        }
+
+        const available = document.getElementById('ed-available');
+        available.innerHTML = '';
+        for (const c of state.cards.filter(c => !ids.includes(c.id))) {
+          const row = document.createElement('div');
+          row.className = 'ed-row excluded';
+          const add = document.createElement('button');
+          add.textContent = '+';
+          add.addEventListener('click', () => setChapters([...ids, c.id]));
+          const t = document.createElement('span');
+          t.className = 't';
+          t.textContent = c.title;
+          row.append(add, t);
+          available.appendChild(row);
+        }
+      };
+
+      document.getElementById('editions-open').addEventListener('click', async () => {
+        await renderEditions();
+        document.getElementById('editions-dialog').showModal();
+      });
+      document.getElementById('ed-select').addEventListener('change', e => {
+        currentEdition = Number(e.target.value) || null;
+        document.getElementById('ed-body').style.display = currentEdition ? '' : 'none';
+        if (currentEdition) renderEditionDetail();
+      });
+      document.getElementById('ed-new').addEventListener('click', async () => {
+        const name = prompt('Edition name (e.g. "Reader\u2019s Edition"):');
+        if (!name || !name.trim()) return;
+        try {
+          const edition = await api(`${base}/editions`, 'POST', { name: name.trim() });
+          renderEditions(edition.id);
+        } catch (e) {
+          alert(e.message);
+        }
+      });
+      document.getElementById('ed-rename').addEventListener('click', async () => {
+        if (!currentEdition) return;
+        const name = prompt('New name:');
+        if (!name || !name.trim()) return;
+        await api(`${base}/editions/${currentEdition}`, 'PATCH', { name: name.trim() });
+        renderEditions(currentEdition);
+      });
+      document.getElementById('ed-delete').addEventListener('click', async () => {
+        if (!currentEdition) return;
+        if (!confirm('Delete this edition? (Chapters themselves are not deleted.)')) return;
+        await api(`${base}/editions/${currentEdition}`, 'DELETE');
+        renderEditions();
+      });
+      document
+        .getElementById('ed-close')
+        .addEventListener('click', () => document.getElementById('editions-dialog').close());
 
       load();
     </script>

@@ -120,6 +120,47 @@ describe('Store Unit Tests', () => {
     });
   });
 
+  describe('editions', () => {
+    it('should create editions with unique names and ordered membership', () => {
+      const a = store.createCard(project.id, { title: 'A', file: 'content/a.md' });
+      const b = store.createCard(project.id, { title: 'B', file: 'content/b.md' });
+      const c = store.createCard(project.id, { title: 'C' });
+
+      const edition = store.createEdition(project.id, { name: "Reader's" });
+      expect(() => store.createEdition(project.id, { name: "Reader's" })).toThrow(/exists/);
+
+      store.setEditionChapters(edition.id, [b.id, a.id, c.id]);
+      const chapters = store.listEditionChapters(edition.id);
+      expect(chapters.map(x => x.title)).toEqual(['B', 'A', 'C']);
+
+      // Reorder + drop one
+      store.setEditionChapters(edition.id, [a.id, b.id]);
+      expect(store.listEditionChapters(edition.id).map(x => x.title)).toEqual(['A', 'B']);
+
+      const listed = store.listEditions(project.id);
+      expect(listed[0].chapterCount).toBe(2);
+    });
+
+    it('should reject cards from other projects', () => {
+      const other = store.getOrCreateProject('/home/me/other');
+      const foreign = store.createCard(other.id, { title: 'X' });
+      const edition = store.createEdition(project.id, { name: 'E' });
+      expect(() => store.setEditionChapters(edition.id, [foreign.id])).toThrow(/not in this/);
+    });
+
+    it('should cascade membership on edition delete and card delete', () => {
+      const a = store.createCard(project.id, { title: 'A' });
+      const edition = store.createEdition(project.id, { name: 'E' });
+      store.setEditionChapters(edition.id, [a.id]);
+
+      store.deleteCard(a.id);
+      expect(store.listEditionChapters(edition.id)).toEqual([]);
+
+      expect(store.deleteEdition(edition.id)).toBe(true);
+      expect(store.findEdition(project.id, 'E')).toBeUndefined();
+    });
+  });
+
   it('should expose five stages in board order', () => {
     expect(STAGES.map(s => s.key)).toEqual(['outline', 'drafting', 'revision', 'beta', 'done']);
   });

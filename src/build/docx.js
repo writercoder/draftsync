@@ -38,12 +38,15 @@ export async function buildDocx(options = {}) {
 
     let mdFiles;
     try {
-      mdFiles = await getFilesToBuild({
-        contentDir,
-        metadataPath: metadata,
-        includePatterns: options.include,
-        excludePatterns: options.exclude
-      });
+      // An explicit ordered list (e.g. from an edition) wins over discovery
+      mdFiles = options.files?.length
+        ? options.files
+        : await getFilesToBuild({
+            contentDir,
+            metadataPath: metadata,
+            includePatterns: options.include,
+            excludePatterns: options.exclude
+          });
     } catch {
       spinner.fail(`Content directory not found: ${contentDir}`);
       console.log(chalk.gray('\nRun "draftsync init" to create the project structure'));

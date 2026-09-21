@@ -42,6 +42,7 @@ export function openStore(dataDir = getDataDir()) {
   mkdirSync(dataDir, { recursive: true });
   const db = new Database(path.join(dataDir, 'draftsync.db'));
   db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
   db.exec(`
     CREATE TABLE IF NOT EXISTS projects (
       id INTEGER PRIMARY KEY,
@@ -89,6 +90,20 @@ export function openStore(dataDir = getDataDir()) {
       done_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id, done);
+    CREATE TABLE IF NOT EXISTS editions (
+      id INTEGER PRIMARY KEY,
+      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      UNIQUE(project_id, name)
+    );
+    CREATE TABLE IF NOT EXISTS edition_chapters (
+      edition_id INTEGER NOT NULL REFERENCES editions(id) ON DELETE CASCADE,
+      card_id INTEGER NOT NULL REFERENCES cards(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (edition_id, card_id)
+    );
   `);
   // Migrations for columns added after the initial schema
   const projectCols = db
@@ -500,6 +515,137 @@ export class Store {
    */
   deleteTask(id) {
     return this.db.prepare('DELETE FROM tasks WHERE id = ?').run(id).changes > 0;
+  }
+
+  /**
+   * List a project's editions with chapter counts
+   *
+   * @param {number} projectId - Project ID
+   * @returns {Array<Object>} Edition rows with chapterCount
+   */
+  listEditions(projectId) {
+    return this.db
+      .prepare(
+        `SELECT e.*, COUNT(ec.card_id) AS chapterCount
+         FROM editions e LEFT JOIN edition_chapters ec ON ec.edition_id = e.id
+         WHERE e.project_id = ?
+         GROUP BY e.id ORDER BY e.name`
+      )
+      .all(projectId);
+  }
+
+  /**
+   * Get one edition by ID
+   *
+   * @param {number} id - Edition ID
+   * @returns {Object|undefined} Edition row
+   */
+  getEdition(id) {
+    return this.db.prepare('SELECT * FROM editions WHERE id = ?').get(id);
+  }
+
+  /**
+   * Find an edition by name within a project
+   *
+   * @param {number} projectId - Project ID
+   * @param {string} name - Edition name
+   * @returns {Object|undefined} Edition row
+   */
+  findEdition(projectId, name) {
+    return this.db
+      .prepare('SELECT * FROM editions WHERE project_id = ? AND name = ?')
+      .get(projectId, name);
+  }
+
+  /**
+   * Create an edition
+   *
+   * @param {number} projectId - Project ID
+   * @param {Object} fields - {name, description}
+   * @returns {Object} The created edition
+   */
+  createEdition(projectId, { name, description = '' }) {
+    if (!name || !name.trim()) throw new Error('name is required');
+    if (this.findEdition(projectId, name.trim())) {
+      throw new Error(`edition "${name.trim()}" already exists`);
+    }
+    const { lastInsertRowid } = this.db
+      .prepare('INSERT INTO editions (project_id, name, description) VALUES (?, ?, ?)')
+      .run(projectId, name.trim(), description);
+    return this.getEdition(lastInsertRowid);
+  }
+
+  /**
+   * Update an edition's name/description
+   *
+   * @param {number} id - Edition ID
+   * @param {Object} fields - Any of name, description
+   * @returns {Object|undefined} Updated edition
+   */
+  updateEdition(id, fields) {
+    const allowed = ['name', 'description'];
+    const updates = allowed.filter(k => fields[k] !== undefined);
+    if (updates.length > 0) {
+      const set = updates.map(k => `${k} = ?`).join(', ');
+      this.db
+        .prepare(`UPDATE editions SET ${set} WHERE id = ?`)
+        .run(...updates.map(k => fields[k]), id);
+    }
+    return this.getEdition(id);
+  }
+
+  /**
+   * Delete an edition (membership rows cascade)
+   *
+   * @param {number} id - Edition ID
+   * @returns {boolean} True if deleted
+   */
+  deleteEdition(id) {
+    return this.db.prepare('DELETE FROM editions WHERE id = ?').run(id).changes > 0;
+  }
+
+  /**
+   * The ordered chapters (cards) of an edition
+   *
+   * @param {number} editionId - Edition ID
+   * @returns {Array<Object>} Card rows in edition order
+   */
+  listEditionChapters(editionId) {
+    return this.db
+      .prepare(
+        `SELECT c.*, ec.position AS editionPosition
+         FROM edition_chapters ec JOIN cards c ON c.id = ec.card_id
+         WHERE ec.edition_id = ?
+         ORDER BY ec.position`
+      )
+      .all(editionId);
+  }
+
+  /**
+   * Replace an edition's ordered chapter membership
+   *
+   * @param {number} editionId - Edition ID
+   * @param {Array<number>} cardIds - Card IDs in the desired order
+   * @returns {Array<Object>} The new ordered chapters
+   */
+  setEditionChapters(editionId, cardIds) {
+    const edition = this.getEdition(editionId);
+    if (!edition) throw new Error('edition not found');
+    const replace = this.db.transaction(() => {
+      this.db.prepare('DELETE FROM edition_chapters WHERE edition_id = ?').run(editionId);
+      const insert = this.db.prepare(
+        'INSERT INTO edition_chapters (edition_id, card_id, position) VALUES (?, ?, ?)'
+      );
+      cardIds.forEach((cardId, position) => {
+        const card = this.getCard(cardId);
+        if (!card || card.project_id !== edition.project_id) {
+          throw new Error(`card ${cardId} is not in this project`);
+        }
+        insert.run(editionId, cardId, position);
+      });
+    });
+    replace();
+    return this.listEditionChapters(editionId);
   }
 
   /** Close the database */

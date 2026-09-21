@@ -1,0 +1,13 @@
+---
+title: 'Five Sonnets'
+author:
+  - 'William Shakespeare'
+publisher: 'draftsync example'
+rights: 'Public domain. Text via Project Gutenberg (ebook #1041).'
+language: en-GB
+description: |
+  A selection from Shakespeare's Sonnets (1609): 18, 29, 73, 116, 130.
+date: '1609-01-01'
+toc: true
+toc-depth: 2
+number-sections: false

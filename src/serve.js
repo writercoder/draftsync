@@ -99,14 +99,24 @@ async function readProjectManifest(projectPath) {
  * @param {string} format - 'epub', 'docx', or 'pdf'
  * @returns {Promise<string>} Absolute path of the built file
  */
-async function buildExport(project, format) {
+async function buildExport(project, format, options = {}) {
   const metadataPath = path.join(project.path, 'templates', 'metadata.yaml');
-  const mdFiles = await getFilesToBuild({
-    contentDir: path.join(project.path, 'content'),
-    metadataPath
-  });
-  if (mdFiles.length === 0) {
-    throw new Error('no Markdown files to build in content/');
+  let mdFiles;
+  let outputName = project.name;
+  if (options.editionFiles) {
+    mdFiles = options.editionFiles;
+    outputName = `${project.name} - ${options.editionName}`;
+    if (mdFiles.length === 0) {
+      throw new Error('this edition has no chapters with linked files');
+    }
+  } else {
+    mdFiles = await getFilesToBuild({
+      contentDir: path.join(project.path, 'content'),
+      metadataPath
+    });
+    if (mdFiles.length === 0) {
+      throw new Error('no Markdown files to build in content/');
+    }
   }
   let metadata = null;
   try {
@@ -115,7 +125,7 @@ async function buildExport(project, format) {
   } catch {
     // optional
   }
-  const output = path.join(project.path, 'dist', `${project.name}.${EXPORT_TYPES[format].ext}`);
+  const output = path.join(project.path, 'dist', `${outputName}.${EXPORT_TYPES[format].ext}`);
 
   if (format === 'docx') {
     await convertMarkdownFilesToDocx(mdFiles, output, { metadata });
@@ -218,6 +228,8 @@ export function createDraftsyncServer({ store }) {
       const cardMatch = route.match(/^\/cards\/(\d+)$/);
       const taskMatch = route.match(/^\/tasks\/(\d+)$/);
       const aiMatch = route.match(/^\/ai-events\/(\d+)$/);
+      const editionMatch = route.match(/^\/editions\/(\d+)$/);
+      const editionChaptersMatch = route.match(/^\/editions\/(\d+)\/chapters$/);
       const exportMatch = route.match(/^\/export\/(epub|docx|pdf)$/);
 
       if (req.method === 'GET' && route === '/board') {
@@ -290,7 +302,21 @@ export function createDraftsyncServer({ store }) {
       if (req.method === 'GET' && exportMatch) {
         const format = exportMatch[1];
         try {
-          const filePath = await buildExport(project, format);
+          let exportOptions = {};
+          const editionId = url.searchParams.get('edition');
+          if (editionId) {
+            const edition = store.getEdition(Number(editionId));
+            if (!edition || edition.project_id !== project.id) {
+              return send(404, { error: 'edition not found' });
+            }
+            const chapters = store.listEditionChapters(edition.id);
+            exportOptions = {
+              editionName: edition.name,
+              // Placeholder cards without linked files are skipped
+              editionFiles: chapters.filter(c => c.file).map(c => path.join(project.path, c.file))
+            };
+          }
+          const filePath = await buildExport(project, format, exportOptions);
           const data = await fs.readFile(filePath);
           res.writeHead(200, {
             'Content-Type': EXPORT_TYPES[format].mime,
@@ -372,6 +398,38 @@ export function createDraftsyncServer({ store }) {
           );
         }
         return send(200, { imported: imported.length, cards: imported });
+      }
+
+      if (req.method === 'GET' && route === '/editions') {
+        return send(200, { editions: store.listEditions(project.id) });
+      }
+      if (req.method === 'POST' && route === '/editions') {
+        const body = await readBody(req);
+        return send(201, store.createEdition(project.id, body));
+      }
+      if (editionChaptersMatch || editionMatch) {
+        const edition = store.getEdition(Number((editionChaptersMatch || editionMatch)[1]));
+        if (!edition || edition.project_id !== project.id) {
+          return send(404, { error: 'edition not found' });
+        }
+        if (editionChaptersMatch && req.method === 'PUT') {
+          const body = await readBody(req);
+          if (!Array.isArray(body.card_ids)) {
+            return send(400, { error: 'card_ids (array) is required' });
+          }
+          return send(200, { chapters: store.setEditionChapters(edition.id, body.card_ids) });
+        }
+        if (editionMatch && req.method === 'GET') {
+          return send(200, { edition, chapters: store.listEditionChapters(edition.id) });
+        }
+        if (editionMatch && req.method === 'PATCH') {
+          const body = await readBody(req);
+          return send(200, store.updateEdition(edition.id, body));
+        }
+        if (editionMatch && req.method === 'DELETE') {
+          store.deleteEdition(edition.id);
+          return send(200, { deleted: true });
+        }
       }
 
       if (req.method === 'GET' && route === '/ai-events') {

@@ -301,6 +301,65 @@ async function statusCommand() {
 }
 
 /**
+ * Resolve an edition name (for the cwd project) to its ordered file list
+ *
+ * @param {string} editionName - Edition name as shown on the board
+ * @returns {Promise<string[]>} Ordered relative file paths
+ */
+async function resolveEditionFiles(editionName) {
+  const store = openStore();
+  try {
+    const project = store.getOrCreateProject(process.cwd());
+    const edition = store.findEdition(project.id, editionName);
+    if (!edition) {
+      const names = store.listEditions(project.id).map(e => e.name);
+      throw new Error(
+        `no edition named "${editionName}"` +
+          (names.length ? `. Available: ${names.join(', ')}` : ' (none defined yet)')
+      );
+    }
+    const chapters = store.listEditionChapters(edition.id);
+    const skipped = chapters.filter(c => !c.file);
+    if (skipped.length > 0) {
+      console.warn(
+        chalk.yellow(
+          `Warning: skipping ${skipped.length} chapter(s) with no linked file: ` +
+            skipped.map(c => c.title).join(', ')
+        )
+      );
+    }
+    const files = chapters.filter(c => c.file).map(c => c.file);
+    if (files.length === 0) {
+      throw new Error(`edition "${editionName}" has no chapters with linked files`);
+    }
+    return files;
+  } finally {
+    store.close();
+  }
+}
+
+/**
+ * Wrap a build action so --edition resolves to an explicit file list
+ *
+ * @param {Function} build - Build function accepting options
+ * @returns {Function} Commander action
+ */
+function withEdition(build) {
+  return async options => {
+    if (options.edition) {
+      try {
+        options.files = await resolveEditionFiles(options.edition);
+      } catch (error) {
+        console.error(chalk.red(`✗ ${error.message}`));
+        process.exitCode = 1;
+        return;
+      }
+    }
+    return build(options);
+  };
+}
+
+/**
  * Log an AI usage event against this project
  */
 async function aiLogCommand(options) {
@@ -446,7 +505,8 @@ export function run() {
       'Include only files matching these patterns (e.g., "chapter-*.md")'
     )
     .option('--exclude <patterns...>', 'Exclude files matching these patterns (e.g., "*.draft.md")')
-    .action(buildEpub);
+    .option('-e, --edition <name>', 'Build a specific edition (defined on the board)')
+    .action(withEdition(buildEpub));
 
   program
     .command('build:docx')
@@ -456,7 +516,8 @@ export function run() {
     .option('-r, --refdoc <path>', 'Reference .docx for styling')
     .option('--include <patterns...>', 'Include only files matching these patterns')
     .option('--exclude <patterns...>', 'Exclude files matching these patterns')
-    .action(buildDocx);
+    .option('-e, --edition <name>', 'Build a specific edition (defined on the board)')
+    .action(withEdition(buildDocx));
 
   program
     .command('check:epub')
