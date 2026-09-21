@@ -283,6 +283,16 @@
         color: var(--muted);
         margin: 0.9rem 0 0.2rem;
       }
+      .card .excerpt {
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        color: var(--muted);
+        font-size: 0.76rem;
+        line-height: 1.35;
+        margin-top: 0.25rem;
+      }
       .card .words {
         display: block;
         color: var(--muted);
@@ -623,6 +633,12 @@
               f.className = 'file';
               f.textContent = chapter.file;
               el.appendChild(f);
+            }
+            if (chapter.excerpt) {
+              const ex = document.createElement('span');
+              ex.className = 'excerpt';
+              ex.textContent = chapter.excerpt;
+              el.appendChild(ex);
             }
             if (chapter.word_count != null && chapter.file) {
               const w = document.createElement('span');
