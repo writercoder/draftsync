@@ -83,6 +83,41 @@
         overflow-y: auto;
         padding: 0.4rem 0.9rem 1rem;
       }
+      .ptask {
+        display: flex;
+        gap: 0.5rem;
+        align-items: baseline;
+        padding: 0.35rem 0;
+        border-bottom: 1px solid var(--ink-faint);
+        font-size: 0.85rem;
+      }
+      .ptask.done .txt {
+        text-decoration: line-through;
+        color: var(--ink-soft);
+      }
+      .ptask .txt {
+        flex: 1;
+      }
+      .ptask .where {
+        color: var(--ink-soft);
+        font-size: 0.7rem;
+        white-space: nowrap;
+      }
+      .ptask button {
+        font-size: 0.7rem;
+        padding: 0.05rem 0.4rem;
+      }
+      .ptask-add {
+        width: 100%;
+        margin: 0.3rem 0 0.5rem;
+      }
+      .ptask-sep {
+        font-size: 0.68rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--ink-soft);
+        margin: 0.8rem 0 0.2rem;
+      }
       .st-item {
         display: flex;
         gap: 0.5rem;
@@ -1262,7 +1297,79 @@
         }
       };
 
+      const renderTasksPanel = async () => {
+        const { tasks } = await api(`${base}/tasks`);
+        const list = document.getElementById('apanel-list');
+        list.innerHTML = '';
+
+        const add = document.createElement('input');
+        add.className = 'ptask-add';
+        add.placeholder = 'Add a task — Enter to save';
+        add.addEventListener('keydown', async e => {
+          if (e.key !== 'Enter' || !add.value.trim()) return;
+          await api(`${base}/tasks`, 'POST', { text: add.value.trim() });
+          renderTasksPanel();
+          load();
+        });
+        list.appendChild(add);
+
+        const chapterTitle = id => state.chapters.find(c => c.id === id)?.title;
+        const renderTask = t => {
+          const row = document.createElement('div');
+          row.className = 'ptask' + (t.done ? ' done' : '');
+          const check = document.createElement('input');
+          check.type = 'checkbox';
+          check.checked = !!t.done;
+          check.addEventListener('change', async () => {
+            await api(`${base}/tasks/${t.id}`, 'PATCH', { done: check.checked });
+            renderTasksPanel();
+            load();
+          });
+          const txt = document.createElement('span');
+          txt.className = 'txt';
+          txt.textContent = t.text;
+          row.append(check, txt);
+          if (t.chapter_id && chapterTitle(t.chapter_id)) {
+            const where = document.createElement('span');
+            where.className = 'where';
+            where.textContent = chapterTitle(t.chapter_id);
+            row.appendChild(where);
+          }
+          const del = document.createElement('button');
+          del.textContent = '×';
+          del.addEventListener('click', async () => {
+            await api(`${base}/tasks/${t.id}`, 'DELETE');
+            renderTasksPanel();
+            load();
+          });
+          row.appendChild(del);
+          list.appendChild(row);
+        };
+
+        const open = tasks.filter(t => !t.done);
+        const done = tasks.filter(t => t.done);
+        if (open.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'ptask';
+          empty.innerHTML =
+            '<span class="txt" style="color: var(--ink-soft)">No open tasks.</span>';
+          list.appendChild(empty);
+        }
+        open.forEach(renderTask);
+        if (done.length > 0) {
+          const sep = document.createElement('div');
+          sep.className = 'ptask-sep';
+          sep.textContent = `Done (${done.length})`;
+          list.appendChild(sep);
+          done.forEach(renderTask);
+        }
+      };
+
       const loadStream = async () => {
+        if (panelCat === 'tasks') {
+          renderTasksPanel();
+          return;
+        }
         streamRows = (await api(`${base}/activity`)).stream;
         renderStream();
       };
