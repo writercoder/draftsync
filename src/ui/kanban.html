@@ -482,15 +482,17 @@
         <input type="text" id="rv-email" required />
         <label for="rv-target">Of</label>
         <select id="rv-target"></select>
-        <label for="rv-body">Received text (optional if attaching a file)</label>
+        <label for="rv-note">Request note (what you're asking for — send only)</label>
+        <input type="text" id="rv-note" placeholder="e.g. pacing and dialogue in acts 2-3" />
+        <label for="rv-body">Received text (receive only; optional with a file)</label>
         <textarea id="rv-body"></textarea>
         <label for="rv-file">Attach received file (optional)</label>
         <input type="file" id="rv-file" />
         <div class="dialog-actions">
-          <span></span>
+          <button type="button" id="rv-send" class="primary">Send for review</button>
           <span>
             <button type="button" id="rv-close">Close</button>
-            <button type="submit" class="primary">Record review</button>
+            <button type="submit" class="primary">Record received feedback</button>
           </span>
         </div>
       </form>
@@ -1041,7 +1043,8 @@
 
       const TYPE_LABELS = {
         file_edited: 'file edited',
-        review_received: 'review',
+        review_sent: 'sent for review',
+        review_received: 'review received',
         task_created: 'task',
         task_completed: 'task done',
         chapter_created: 'chapter',
@@ -1053,6 +1056,8 @@
         switch (a.type) {
           case 'file_edited':
             return `${a.chapterTitle || d.file} — +${d.linesAdded}/−${d.linesRemoved} lines, now ${d.wordCount} words`;
+          case 'review_sent':
+            return `to ${d.reviewer}` + (a.chapterTitle ? ` — ${a.chapterTitle}` : '');
           case 'review_received':
             return (
               `from ${d.reviewer}` +
@@ -1110,15 +1115,31 @@
         for (const rv of reviews) {
           const div = document.createElement('div');
           div.className = 'ai-event';
+          if (rv.status === 'sent') {
+            const receive = document.createElement('button');
+            receive.textContent = 'Record feedback';
+            receive.style.float = 'right';
+            receive.addEventListener('click', () => {
+              fulfilling = rv.id;
+              document.getElementById('rv-name').value = rv.reviewer_name;
+              document.getElementById('rv-email').value = rv.reviewer_email;
+              document.getElementById('rv-body').focus();
+            });
+            div.appendChild(receive);
+          }
           const head = document.createElement('div');
-          head.textContent = `${rv.reviewer_name} <${rv.reviewer_email}> — ${
+          head.textContent = `${rv.status === 'sent' ? '⏳ awaiting' : '✓ received'} — ${rv.reviewer_name} <${rv.reviewer_email}> — ${
             rv.chapterTitle ? 'chapter: ' + rv.chapterTitle : 'edition: ' + rv.editionName
           }`;
           div.appendChild(head);
           const meta = document.createElement('div');
           meta.className = 'meta';
           meta.textContent =
-            (rv.created_at || '').slice(0, 16) + (rv.file ? ` · file: ${rv.file}` : '');
+            (rv.status === 'sent'
+              ? `sent ${(rv.sent_at || '').slice(0, 16)}`
+              : `received ${(rv.received_at || '').slice(0, 16)}`) +
+            (rv.request_note ? ` · asked: ${rv.request_note}` : '') +
+            (rv.file ? ` · file: ${rv.file}` : '');
           div.appendChild(meta);
           if (rv.body) {
             const bodyEl = document.createElement('div');
@@ -1130,6 +1151,27 @@
         }
       };
 
+      let fulfilling = null;
+      const reviewTarget = () => {
+        const [kind, targetId] = document.getElementById('rv-target').value.split(':');
+        return kind === 'c' ? { chapter_id: Number(targetId) } : { edition_id: Number(targetId) };
+      };
+
+      document.getElementById('rv-send').addEventListener('click', async () => {
+        try {
+          await api(`${base}/reviews/request`, 'POST', {
+            ...reviewTarget(),
+            reviewer_name: document.getElementById('rv-name').value,
+            reviewer_email: document.getElementById('rv-email').value,
+            request_note: document.getElementById('rv-note').value || undefined
+          });
+          document.getElementById('rv-note').value = '';
+          renderReviews();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+
       document.getElementById('reviews-open').addEventListener('click', async () => {
         await renderReviews();
         document.getElementById('reviews-dialog').showModal();
@@ -1140,14 +1182,14 @@
 
       document.getElementById('review-form').addEventListener('submit', async e => {
         e.preventDefault();
-        const [kind, targetId] = document.getElementById('rv-target').value.split(':');
-        const payload = {
-          reviewer_name: document.getElementById('rv-name').value,
-          reviewer_email: document.getElementById('rv-email').value,
-          body: document.getElementById('rv-body').value || undefined
-        };
-        if (kind === 'c') payload.chapter_id = Number(targetId);
-        else payload.edition_id = Number(targetId);
+        const payload = fulfilling
+          ? { review_id: fulfilling, body: document.getElementById('rv-body').value || undefined }
+          : {
+              ...reviewTarget(),
+              reviewer_name: document.getElementById('rv-name').value,
+              reviewer_email: document.getElementById('rv-email').value,
+              body: document.getElementById('rv-body').value || undefined
+            };
         const fileInput = document.getElementById('rv-file');
         if (fileInput.files[0]) {
           const file = fileInput.files[0];
@@ -1160,6 +1202,7 @@
         }
         try {
           await api(`${base}/reviews`, 'POST', payload);
+          fulfilling = null;
           document.getElementById('rv-body').value = '';
           fileInput.value = '';
           renderReviews();

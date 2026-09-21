@@ -159,8 +159,12 @@ export function openStore(dataDir = getDataDir()) {
       edition_id INTEGER REFERENCES editions(id) ON DELETE SET NULL,
       reviewer_name TEXT NOT NULL,
       reviewer_email TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'received',
+      request_note TEXT NOT NULL DEFAULT '',
       body TEXT NOT NULL DEFAULT '',
       file TEXT,
+      sent_at TEXT,
+      received_at TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE TABLE IF NOT EXISTS activities (
@@ -186,6 +190,24 @@ export function openStore(dataDir = getDataDir()) {
     .map(c => c.name);
   if (!projectCols.includes('label')) {
     db.exec('ALTER TABLE projects ADD COLUMN label TEXT');
+  }
+  const reviewTables = db
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'reviews'")
+    .all();
+  if (reviewTables.length > 0) {
+    const reviewCols = db
+      .prepare('PRAGMA table_info(reviews)')
+      .all()
+      .map(c => c.name);
+    if (!reviewCols.includes('status')) {
+      db.exec(`
+        ALTER TABLE reviews ADD COLUMN status TEXT NOT NULL DEFAULT 'received';
+        ALTER TABLE reviews ADD COLUMN request_note TEXT NOT NULL DEFAULT '';
+        ALTER TABLE reviews ADD COLUMN sent_at TEXT;
+        ALTER TABLE reviews ADD COLUMN received_at TEXT;
+        UPDATE reviews SET received_at = created_at WHERE received_at IS NULL;
+      `);
+    }
   }
   const chapterCols = db
     .prepare('PRAGMA table_info(chapters)')
@@ -1054,21 +1076,59 @@ export class Store {
       editionId = null,
       reviewerName,
       reviewerEmail,
+      status = 'received',
+      requestNote = '',
       body = '',
       file = null
     } = fields;
     if (!reviewerName || !reviewerName.trim()) throw new Error('reviewerName is required');
     if (!reviewerEmail || !reviewerEmail.trim()) throw new Error('reviewerEmail is required');
+    if (!['sent', 'received'].includes(status)) throw new Error(`unknown status: ${status}`);
     if ((chapterId === null) === (editionId === null)) {
       throw new Error('a review targets exactly one of chapterId or editionId');
     }
     const { lastInsertRowid } = this.db
       .prepare(
         `INSERT INTO reviews (project_id, chapter_id, edition_id, reviewer_name,
-           reviewer_email, body, file) VALUES (?, ?, ?, ?, ?, ?, ?)`
+           reviewer_email, status, request_note, body, file, sent_at, received_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?,
+           CASE WHEN ? = 'sent' THEN datetime('now') ELSE NULL END,
+           CASE WHEN ? = 'received' THEN datetime('now') ELSE NULL END)`
       )
-      .run(projectId, chapterId, editionId, reviewerName.trim(), reviewerEmail.trim(), body, file);
+      .run(
+        projectId,
+        chapterId,
+        editionId,
+        reviewerName.trim(),
+        reviewerEmail.trim(),
+        status,
+        requestNote,
+        body,
+        file,
+        status,
+        status
+      );
     return this.getReview(lastInsertRowid);
+  }
+
+  /**
+   * Mark a sent review as received, attaching the feedback
+   *
+   * @param {number} id - Review ID
+   * @param {Object} feedback - {body?, file?}
+   * @returns {Object|undefined} Updated review
+   */
+  receiveReview(id, { body, file } = {}) {
+    const review = this.getReview(id);
+    if (!review) return undefined;
+    if (review.status === 'received') throw new Error('review already received');
+    this.db
+      .prepare(
+        `UPDATE reviews SET status = 'received', received_at = datetime('now'),
+           body = COALESCE(?, body), file = COALESCE(?, file) WHERE id = ?`
+      )
+      .run(body ?? null, file ?? null, id);
+    return this.getReview(id);
   }
 
   /**

@@ -274,10 +274,14 @@ by `GET /api/openapi.json` (generated from the operation schemas).
   edits** by content hash, measuring change magnitude with a classic
   line diff (+added/−removed). Markdown only in v1; DOCX/Google Docs
   revisions are a future milestone.
-- **Reviews**: record received feedback on a chapter or an edition —
-  reviewer name and email, with text and/or an attached file (stored
-  under `~/.draftsync/reviews/`). Board: the Reviews dialog;
-  API/CLI: `review.create`. Google Doc comments integration is planned.
+- **Reviews are a lifecycle**: _send for review_ (`review.request` —
+  reviewer name/email, target chapter or edition, and a note of what
+  you asked for) → _awaiting_ → _receive feedback_ (`review.receive` —
+  text and/or an attached file, stored under `~/.draftsync/reviews/`).
+  Unsolicited feedback can be received directly without a prior
+  request. Both steps land on the timeline. Board: the Reviews dialog
+  ("Record feedback" on any awaiting review fulfils it). Google Doc
+  comments integration is planned.
 - **Timeline**: a per-project (and per-chapter) activity feed — file
   edited, review received, task created/completed, chapter and edition
   created. Board: the Timeline dialog; API: `timeline.list`.

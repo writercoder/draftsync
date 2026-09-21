@@ -595,50 +595,103 @@ defineOperation({
 
 /* -------------------------------- reviews -------------------------------- */
 
+async function storeReviewFile(fileName, fileBase64) {
+  const safe = fileName.replace(/[^\w.\- ]/g, '_');
+  const reviewsDir = path.join(getDataDir(), 'reviews');
+  await fs.mkdir(reviewsDir, { recursive: true });
+  const file = path.join('reviews', `${crypto.randomUUID().slice(0, 8)}-${safe}`);
+  await fs.writeFile(path.join(getDataDir(), file), Buffer.from(fileBase64, 'base64'));
+  return file;
+}
+
 defineOperation({
-  name: 'review.create',
+  name: 'review.request',
   description:
-    'Record a received review of a chapter or an edition: reviewer name and email, with text and/or an attached file (base64); records a review_received timeline activity',
+    'Send a chapter or an edition for review: records the request (status "sent") with reviewer name/email and an optional note of what was asked; feedback arrives later via review.receive',
   input: z.object({
     project_id: id,
     chapter_id: id.optional(),
     edition_id: id.optional(),
     reviewer_name: z.string().min(1),
     reviewer_email: z.string().email(),
+    request_note: z.string().optional()
+  }),
+  handler: ({ store }, input) => {
+    const project = projectOf(store, input.project_id);
+    if (input.chapter_id) chapterIn(store, project.id, input.chapter_id);
+    if (input.edition_id) editionIn(store, project.id, input.edition_id);
+    const review = store.createReview(project.id, {
+      chapterId: input.chapter_id ?? null,
+      editionId: input.edition_id ?? null,
+      reviewerName: input.reviewer_name,
+      reviewerEmail: input.reviewer_email,
+      status: 'sent',
+      requestNote: input.request_note ?? ''
+    });
+    store.addActivity(project.id, {
+      type: 'review_sent',
+      chapterId: input.chapter_id ?? null,
+      data: { reviewer: input.reviewer_name, edition_id: input.edition_id ?? null }
+    });
+    return review;
+  }
+});
+
+defineOperation({
+  name: 'review.receive',
+  description:
+    'Record received feedback: fulfil a sent review by review_id, or record unsolicited feedback by target + reviewer; text and/or an attached file (base64); records a review_received timeline activity',
+  input: z.object({
+    project_id: id,
+    review_id: id.optional(),
+    chapter_id: id.optional(),
+    edition_id: id.optional(),
+    reviewer_name: z.string().min(1).optional(),
+    reviewer_email: z.string().email().optional(),
     body: z.string().optional(),
     file_name: z.string().optional(),
     file_base64: z.string().max(14_000_000).optional()
   }),
   handler: async ({ store }, input) => {
     const project = projectOf(store, input.project_id);
-    if (input.chapter_id) chapterIn(store, project.id, input.chapter_id);
-    if (input.edition_id) editionIn(store, project.id, input.edition_id);
-
     let file = null;
     if (input.file_base64) {
       if (!input.file_name) throw new OperationError('file_name is required with file_base64');
-      const safe = input.file_name.replace(/[^\w.\- ]/g, '_');
-      const reviewsDir = path.join(getDataDir(), 'reviews');
-      await fs.mkdir(reviewsDir, { recursive: true });
-      file = path.join('reviews', `${crypto.randomUUID().slice(0, 8)}-${safe}`);
-      await fs.writeFile(path.join(getDataDir(), file), Buffer.from(input.file_base64, 'base64'));
+      file = await storeReviewFile(input.file_name, input.file_base64);
     }
 
-    const review = store.createReview(project.id, {
-      chapterId: input.chapter_id ?? null,
-      editionId: input.edition_id ?? null,
-      reviewerName: input.reviewer_name,
-      reviewerEmail: input.reviewer_email,
-      body: input.body ?? '',
-      file
-    });
+    let review;
+    if (input.review_id) {
+      const existing = store.getReview(input.review_id);
+      if (!existing || existing.project_id !== project.id) {
+        throw new OperationError('review not found', 404);
+      }
+      review = store.receiveReview(input.review_id, { body: input.body, file });
+    } else {
+      if (!input.reviewer_name || !input.reviewer_email) {
+        throw new OperationError(
+          'reviewer_name and reviewer_email are required for unsolicited feedback'
+        );
+      }
+      if (input.chapter_id) chapterIn(store, project.id, input.chapter_id);
+      if (input.edition_id) editionIn(store, project.id, input.edition_id);
+      review = store.createReview(project.id, {
+        chapterId: input.chapter_id ?? null,
+        editionId: input.edition_id ?? null,
+        reviewerName: input.reviewer_name,
+        reviewerEmail: input.reviewer_email,
+        status: 'received',
+        body: input.body ?? '',
+        file
+      });
+    }
     store.addActivity(project.id, {
       type: 'review_received',
-      chapterId: input.chapter_id ?? null,
+      chapterId: review.chapter_id,
       data: {
-        reviewer: input.reviewer_name,
-        edition_id: input.edition_id ?? null,
-        hasFile: !!file
+        reviewer: review.reviewer_name,
+        edition_id: review.edition_id,
+        hasFile: !!review.file
       }
     });
     return review;

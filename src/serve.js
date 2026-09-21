@@ -300,7 +300,16 @@ export function createDraftsyncServer({ store }) {
         return send(200, await run('review.list', { project_id }));
       }
       if (req.method === 'POST' && route === '/reviews') {
-        return send(201, await run('review.create', { project_id, ...(await readBody(req)) }));
+        return send(201, await run('review.receive', { project_id, ...(await readBody(req)) }));
+      }
+      if (req.method === 'POST' && route === '/reviews/request') {
+        return send(201, await run('review.request', { project_id, ...(await readBody(req)) }));
+      }
+      if ((x = r(/^\/reviews\/(\d+)\/receive$/)) && req.method === 'POST') {
+        return send(
+          201,
+          await run('review.receive', { project_id, review_id: x[1], ...(await readBody(req)) })
+        );
       }
       if ((x = r(/^\/reviews\/(\d+)$/)) && req.method === 'DELETE') {
         return send(200, await run('review.delete', { project_id, review_id: x[1] }));

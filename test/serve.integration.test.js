@@ -317,6 +317,40 @@ describe('Serve Integration Tests', () => {
   });
 
   describe('reviews and timeline', () => {
+    it('should run the review lifecycle: request, await, receive feedback', async () => {
+      const chapter = await api(`${p}/chapters`, 'POST', { title: 'Ch L' });
+
+      const sent = await api(`${p}/reviews/request`, 'POST', {
+        chapter_id: chapter.body.id,
+        reviewer_name: 'Sarah',
+        reviewer_email: 'sarah@example.com',
+        request_note: 'pacing in the middle third'
+      });
+      expect(sent.status).toBe(201);
+      expect(sent.body.status).toBe('sent');
+      expect(sent.body.sent_at).toBeTruthy();
+      expect(sent.body.received_at).toBeNull();
+      expect(sent.body.request_note).toBe('pacing in the middle third');
+
+      const received = await api(`${p}/reviews/${sent.body.id}/receive`, 'POST', {
+        body: 'The middle third drags; cut scene four.'
+      });
+      expect(received.status).toBe(201);
+      expect(received.body.status).toBe('received');
+      expect(received.body.received_at).toBeTruthy();
+      expect(received.body.body).toContain('scene four');
+
+      // Receiving twice is an error
+      const again = await api(`${p}/reviews/${sent.body.id}/receive`, 'POST', { body: 'x' });
+      expect(again.status).toBe(400);
+      expect(again.body.error).toContain('already received');
+
+      const timeline = await api(`${p}/timeline`);
+      const types = timeline.body.activities.map(a => a.type);
+      expect(types).toContain('review_sent');
+      expect(types).toContain('review_received');
+    });
+
     it('should receive chapter and edition reviews, with files, on the timeline', async () => {
       const chapter = await api(`${p}/chapters`, 'POST', { title: 'Ch 1' });
       const edition = await api(`${p}/editions`, 'POST', { name: 'RE' });
@@ -397,7 +431,7 @@ describe('Serve Integration Tests', () => {
       const doc = await api('/api/openapi.json');
       expect(doc.status).toBe(200);
       expect(doc.body.openapi).toBe('3.1.0');
-      expect(doc.body.paths['/api/op/review.create']).toBeDefined();
+      expect(doc.body.paths['/api/op/review.receive']).toBeDefined();
     });
   });
 
