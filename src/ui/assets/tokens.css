@@ -17,12 +17,12 @@
 
 :root {
   /* Zone 1 — text & writing (authorly monochrome) */
-  --paper: #fbfaf7;
+  --paper: #fafafa;
   --paper-raised: #ffffff;
-  --paper-sunken: #f0eee7;
-  --ink: #232830;
+  --paper-sunken: #f0f0ef;
+  --ink: #1f2226;
   --ink-soft: #6b7480;
-  --ink-faint: #e0ddd8;
+  --ink-faint: #e4e4e2;
 
   /* Zone 2 — project management (infrastructure) */
   --infra: #2f5a8f;
@@ -60,12 +60,12 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --paper: #14171c;
-    --paper-raised: #232a33;
-    --paper-sunken: #1b2027;
-    --ink: #e9e6df;
+    --paper: #161616;
+    --paper-raised: #222222;
+    --paper-sunken: #1c1c1c;
+    --ink: #e8e8e6;
     --ink-soft: #99a1ab;
-    --ink-faint: #2a3038;
+    --ink-faint: #2e2e2e;
 
     --infra: #7fa8d9;
     --infra-soft: #8fa6ba;

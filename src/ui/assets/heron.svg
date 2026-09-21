@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
   <!-- draftsync mark: origami heron — paper, patience, delivery -->
   <g fill="none">
-    <polygon points="6,54 34,46 60,50 72,62 42,72" fill="#232830"/>
-    <polygon points="30,52 56,26 64,50" fill="#6b7480"/>
-    <polygon points="58,50 64,48 74,20 70,19" fill="#232830"/>
-    <polygon points="68,17 76,23 92,14" fill="#232830"/>
-    <path d="M44 71 L44 92 M56 69 L60 92" stroke="#232830" stroke-width="2.5" stroke-linecap="round"/>
+    <polygon points="6,54 34,46 60,50 72,62 42,72" fill="#1f2226"/>
+    <polygon points="34,50 58,24 66,52" fill="#6b7480"/>
+    <polygon points="60,50 66,52 76,22 71,20" fill="#1f2226"/>
+    <polygon points="70,18 78,24 93,15" fill="#1f2226"/>
+    <path d="M44 71 L44 92 M56 69 L60 92" stroke="#1f2226" stroke-width="2.5" stroke-linecap="round"/>
   </g>
 </svg>

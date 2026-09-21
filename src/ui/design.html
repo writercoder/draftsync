@@ -78,6 +78,92 @@
       .mark svg .stroke-ink {
         stroke: var(--ink);
       }
+      .spec-card {
+        background: var(--paper-raised);
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius);
+        padding: 0.5rem 0.7rem;
+        max-width: 240px;
+      }
+      .spec-card .title {
+        font-weight: 500;
+      }
+      .spec-card .excerpt {
+        font-family: var(--font-authorly);
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+        line-height: 1.35;
+        margin-top: 0.25rem;
+      }
+      .spec-card .words {
+        display: block;
+        color: var(--ink-soft);
+        font-size: 0.7rem;
+        margin-top: 0.15rem;
+        font-variant-numeric: tabular-nums;
+      }
+      .spec-card .gdoc {
+        font-size: 0.72rem;
+        color: var(--infra);
+        text-decoration: none;
+        margin-right: 0.4rem;
+      }
+      .spec-card .file {
+        display: block;
+        color: var(--ink-soft);
+        font-family: var(--font-mono);
+        font-size: 0.68rem;
+        margin-top: 0.3rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .chip.task {
+        color: var(--infra-soft);
+        margin-right: 0.3rem;
+      }
+      .feed .item {
+        display: flex;
+        gap: 0.55rem;
+        align-items: baseline;
+        padding: 0.4rem 0;
+        border-bottom: 1px solid var(--ink-faint);
+        font-size: 0.85rem;
+      }
+      .feed .when {
+        color: var(--ink-soft);
+        font-size: 0.72rem;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+        font-family: var(--font-mono);
+      }
+      .feed .kind {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        white-space: nowrap;
+        color: var(--infra);
+      }
+      .feed .kind.ai {
+        color: var(--ai-pink);
+      }
+      .feed .what {
+        flex: 1;
+      }
+      .feed .quote {
+        display: block;
+        font-family: var(--font-authorly);
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+        margin-top: 0.1rem;
+      }
+      .feed .ok {
+        color: var(--ai-green);
+      }
+      .feed .warn {
+        color: var(--ai-orange);
+      }
       .rules li {
         margin-bottom: 0.4rem;
       }
@@ -157,9 +243,9 @@
         <div class="mark">
           <svg width="120" height="120" viewBox="0 0 100 100">
             <polygon class="fill-ink" points="6,54 34,46 60,50 72,62 42,72" />
-            <polygon class="fill-soft" points="30,52 56,26 64,50" />
-            <polygon class="fill-ink" points="58,50 64,48 74,20 70,19" />
-            <polygon class="fill-ink" points="68,17 76,23 92,14" />
+            <polygon class="fill-soft" points="34,50 58,24 66,52" />
+            <polygon class="fill-ink" points="60,50 66,52 76,22 71,20" />
+            <polygon class="fill-ink" points="70,18 78,24 93,15" />
             <path
               class="stroke-ink"
               d="M44 71 L44 92 M56 69 L60 92"
@@ -198,29 +284,68 @@
           B · line heron
         </div>
         <div class="mark">
-          <svg width="120" height="120" viewBox="0 0 100 100">
-            <polygon class="fill-soft" points="24,42 54,20 60,42" />
-            <path
-              class="stroke-ink"
-              fill="none"
-              stroke-width="3"
-              stroke-linecap="round"
-              d="M14 58 Q40 46 66 40 L84 34"
-            />
-            <path
-              class="stroke-ink"
-              fill="none"
-              stroke-width="2"
-              stroke-linecap="round"
-              d="M80 36 Q76 48 70 54"
-            />
-            <circle class="fill-ink" cx="70" cy="59" r="5.5" />
-          </svg>
-          C · stork, delivering (sketch)
-        </div>
-        <div class="mark">
           <div class="authorly" style="font-size: 2rem; padding: 1.6rem 1rem 1.2rem">draftsync</div>
           wordmark · authorly serif
+        </div>
+      </div>
+
+      <h2>Composites — the zones together</h2>
+      <p class="zone-note">
+        Where the language earns its keep: one surface, three zones, no ambiguity about what
+        anything is.
+      </p>
+      <div class="specimen">
+        <div class="label">Chapter card — text (serif, ink) + PM (blue/grey) + AI (pink)</div>
+        <div class="spec-card">
+          <div class="title">The Gettysburg Address (Bliss)</div>
+          <span class="excerpt"
+            >Four score and seven years ago our fathers brought forth, on this continent, a new
+            nation…</span
+          >
+          <span class="words">276 words</span>
+          <a class="gdoc" href="#">Google Doc ↗</a>
+          <span class="chip task">☐ 1</span>
+          <span class="chip ai">AI 1</span>
+          <span class="file">content/01-gettysburg-address.md</span>
+        </div>
+      </div>
+      <div class="specimen">
+        <div class="label">Newsfeed — all three zones in one stream</div>
+        <div class="feed">
+          <div class="item">
+            <span class="when">09-21 14:02</span><span class="kind">file edited</span>
+            <span class="what"
+              >The Opening — +12/−4 lines, now 1,832 words
+              <span class="quote"
+                >“It was not the storm that woke her, but the silence after.”</span
+              >
+            </span>
+          </div>
+          <div class="item">
+            <span class="when">09-21 11:40</span><span class="kind">review received</span>
+            <span class="what">from Sarah Chen on Chapter 3 (file attached)</span>
+          </div>
+          <div class="item">
+            <span class="when">09-21 10:15</span><span class="kind ai">ai · critique</span>
+            <span class="what"
+              >claude.ai session on Chapter 3 <span class="ok">✓ justified</span></span
+            >
+          </div>
+          <div class="item">
+            <span class="when">09-20 18:55</span><span class="kind ai">ai · prose</span>
+            <span class="what"
+              >suggestion adopted in Introduction
+              <span class="warn">⚠ needs acknowledgment</span></span
+            >
+          </div>
+          <div class="item">
+            <span class="when">09-20 16:20</span><span class="kind">task done</span>
+            <span class="what">Fix pacing per editor notes — Chapter 3</span>
+          </div>
+          <div class="item">
+            <span class="when">09-20 09:03</span><span class="kind">sent for review</span>
+            <span class="what">to Tom Wade — Everett copy, “pacing and dialogue in acts 2–3”</span>
+          </div>
         </div>
       </div>
 

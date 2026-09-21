@@ -90,11 +90,12 @@
       .card .file {
         display: block;
         color: var(--ink-soft);
-        font-size: 0.72rem;
-        margin-top: 0.2rem;
-        overflow-wrap: anywhere;
         font-family: var(--font-mono);
         font-size: 0.68rem;
+        margin-top: 0.3rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .card .gdoc {
         display: inline-block;
@@ -520,12 +521,6 @@
             el.draggable = true;
             el.dataset.id = chapter.id;
             el.textContent = chapter.title;
-            if (chapter.file) {
-              const f = document.createElement('span');
-              f.className = 'file';
-              f.textContent = chapter.file;
-              el.appendChild(f);
-            }
             if (chapter.excerpt) {
               const ex = document.createElement('span');
               ex.className = 'excerpt';
@@ -560,6 +555,12 @@
               chip.className = 'ai-chip';
               chip.textContent = `AI ${aiCount}`;
               el.appendChild(chip);
+            }
+            if (chapter.file) {
+              const f = document.createElement('span');
+              f.className = 'file';
+              f.textContent = chapter.file;
+              el.appendChild(f);
             }
             el.addEventListener('dragstart', () => el.classList.add('dragging'));
             el.addEventListener('dragend', () => el.classList.remove('dragging'));

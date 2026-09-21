@@ -49,8 +49,8 @@ losing the friendliness and utility of GitHub-style tooling.
 
 Provisional mark: the **origami heron** (`assets/heron.svg`) — paper
 and bird in one image: folded from the same material the writing is
-made of, patient, precise, delivers. Candidates and alternatives render
-on `/design`. The mark is zone 1 (monochrome ink); it must work at
+made of, patient, precise, delivers. Candidates render on `/design` (a delivering-stork sketch was tried
+and dropped — it read as clip-art). The mark is zone 1 (monochrome ink); it must work at
 16px (favicon) and in both themes.
 
 Voice: quiet confidence. Labels say what happens ("Send for review",
