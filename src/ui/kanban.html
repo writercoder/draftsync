@@ -37,10 +37,14 @@
         flex-direction: column;
         min-height: 0;
       }
-      body.panel-open .apanel {
+      body.panel-activity #apanel {
         display: flex;
       }
-      body.panel-open #panel-toggle {
+      body.panel-tasks #tpanel {
+        display: flex;
+      }
+      body.panel-activity #panel-toggle,
+      body.panel-tasks #tasks-toggle {
         border-color: var(--infra);
         color: var(--infra);
       }
@@ -444,6 +448,7 @@
           >
         </div>
       </div>
+      <button id="tasks-toggle">☐ Tasks</button>
       <button id="panel-toggle">◨ Activity</button>
     </header>
     <div class="layout">
@@ -453,7 +458,6 @@
           <button class="chipbtn active" data-cat="all">All</button>
           <button class="chipbtn" data-cat="files">Files</button>
           <button class="chipbtn" data-cat="reviews">Reviews</button>
-          <button class="chipbtn" data-cat="tasks">Tasks</button>
           <button class="chipbtn ai" data-cat="ai">AI</button>
         </div>
         <div class="apanel-actions">
@@ -462,6 +466,10 @@
           <button id="ap-ai">＋ Log AI</button>
         </div>
         <div class="apanel-list" id="apanel-list"></div>
+      </aside>
+      <aside class="apanel" id="tpanel">
+        <div class="apanel-head"><strong style="font-size: 0.85rem">Tasks</strong></div>
+        <div class="apanel-list" id="tpanel-list"></div>
       </aside>
     </div>
 
@@ -1224,13 +1232,15 @@
         const openTasks = tasks.filter(t => !t.done).length;
         document.getElementById('am-tasks-count').textContent =
           openTasks > 0 ? `${openTasks} open` : `${tasks.length}`;
+        document.getElementById('tasks-toggle').textContent =
+          openTasks > 0 ? `☐ Tasks (${openTasks})` : '☐ Tasks';
       };
 
       document
         .getElementById('am-tasks-head')
-        .addEventListener('click', () => setPanel('tasks', true));
+        .addEventListener('click', () => setPanelMode('tasks'));
       document.getElementById('am-create-task').addEventListener('click', () => {
-        setPanel('tasks', true);
+        setPanelMode('tasks');
         setTimeout(() => document.querySelector('.ptask-add')?.focus(), 350);
       });
       document
@@ -1315,7 +1325,7 @@
 
       const renderTasksPanel = async () => {
         const { tasks } = await api(`${base}/tasks`);
-        const list = document.getElementById('apanel-list');
+        const list = document.getElementById('tpanel-list');
         list.innerHTML = '';
 
         const add = document.createElement('input');
@@ -1382,41 +1392,49 @@
       };
 
       const loadStream = async () => {
-        if (panelCat === 'tasks') {
-          renderTasksPanel();
-          return;
-        }
         streamRows = (await api(`${base}/activity`)).stream;
         renderStream();
       };
+
+      const setPanelMode = mode => {
+        document.body.classList.toggle('panel-activity', mode === 'activity');
+        document.body.classList.toggle('panel-tasks', mode === 'tasks');
+        localStorage.setItem('draftsync-panel-mode', mode || '');
+        if (mode === 'activity') loadStream();
+        if (mode === 'tasks') renderTasksPanel();
+      };
+      const panelMode = () =>
+        document.body.classList.contains('panel-activity')
+          ? 'activity'
+          : document.body.classList.contains('panel-tasks')
+            ? 'tasks'
+            : null;
 
       const setPanel = (cat, open) => {
         panelCat = cat;
         for (const chip of document.querySelectorAll('.chipbtn')) {
           chip.classList.toggle('active', chip.dataset.cat === cat);
         }
-        if (open) {
-          document.body.classList.add('panel-open');
-          localStorage.setItem('draftsync-panel', '1');
-        }
-        loadStream();
+        if (open) setPanelMode('activity');
+        else loadStream();
       };
 
       for (const chip of document.querySelectorAll('.chipbtn')) {
         chip.addEventListener('click', () => setPanel(chip.dataset.cat, true));
       }
-      document.getElementById('panel-toggle').addEventListener('click', () => {
-        const open = document.body.classList.toggle('panel-open');
-        localStorage.setItem('draftsync-panel', open ? '1' : '');
-        if (open) loadStream();
-      });
+      document
+        .getElementById('panel-toggle')
+        .addEventListener('click', () =>
+          setPanelMode(panelMode() === 'activity' ? null : 'activity')
+        );
+      document
+        .getElementById('tasks-toggle')
+        .addEventListener('click', () => setPanelMode(panelMode() === 'tasks' ? null : 'tasks'));
       document.getElementById('ap-send').addEventListener('click', () => openReviews('rv-name'));
       document.getElementById('ap-record').addEventListener('click', () => openReviews('rv-body'));
       document.getElementById('ap-ai').addEventListener('click', openAi);
-      if (localStorage.getItem('draftsync-panel')) {
-        document.body.classList.add('panel-open');
-        loadStream();
-      }
+      const savedMode = localStorage.getItem('draftsync-panel-mode');
+      if (savedMode) setPanelMode(savedMode);
 
       // Refresh file stats on page load, then render the board
       (async () => {
@@ -1427,7 +1445,8 @@
         }
         load();
         refreshMenuCounts();
-        if (document.body.classList.contains('panel-open')) loadStream();
+        if (panelMode() === 'activity') loadStream();
+        if (panelMode() === 'tasks') renderTasksPanel();
       })();
     </script>
   </body>
