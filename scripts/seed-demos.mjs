@@ -1,4 +1,3 @@
-#!/usr/bin/env node
 /**
  * Seed the example projects with full workflow histories: review
  * lifecycles (sent + received), tasks, AI usage, and timeline
