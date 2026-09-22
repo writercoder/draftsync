@@ -16,6 +16,7 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { existsSync } from 'fs';
 import { getDataDir } from './store.js';
+import { builtinGoogleClient } from './google-client.js';
 
 // Required OAuth2 scopes.
 // drive.file (non-sensitive) only grants access to files this app created —
@@ -69,11 +70,19 @@ export async function loadCredentials(credentialsPath = getCredentialsPath()) {
   try {
     content = await fs.readFile(credentialsPath, 'utf8');
   } catch {
+    if (builtinGoogleClient) {
+      return {
+        installed: {
+          client_id: builtinGoogleClient.client_id,
+          client_secret: builtinGoogleClient.client_secret,
+          redirect_uris: ['http://localhost']
+        }
+      };
+    }
     throw new Error(
-      'credentials.json not found. ' +
-        'Download an OAuth client ID (Desktop app) from Google Cloud Console ' +
-        'and save it as credentials.json in the project root.\n' +
-        'See README.md for instructions.'
+      'No Google OAuth client available. This build has none bundled — ' +
+        `save an OAuth client (Desktop app) JSON as ${getCredentialsPath()}. ` +
+        'See README.md "Developer setup".'
     );
   }
 
@@ -85,6 +94,21 @@ export async function loadCredentials(credentialsPath = getCredentialsPath()) {
     );
   }
   return credentials;
+}
+
+/**
+ * Is any Google OAuth client available (bundled or credentials file)?
+ *
+ * @returns {Promise<boolean>} True when Connect can run
+ */
+export async function hasGoogleClient() {
+  if (builtinGoogleClient) return true;
+  try {
+    await fs.access(getCredentialsPath());
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**

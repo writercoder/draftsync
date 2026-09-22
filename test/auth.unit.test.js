@@ -52,7 +52,7 @@ describe('Auth Unit Tests', () => {
 
     it('should throw a setup hint when the file is missing', async () => {
       await expect(loadCredentials(join(tempDir, 'nope.json'))).rejects.toThrow(
-        /credentials\.json not found/
+        /No Google OAuth client available/
       );
     });
 

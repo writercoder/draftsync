@@ -325,7 +325,7 @@
       let tab = 'projects';
       let projects = [];
       let filterLabel = 'all'; // 'all' | 'fav' | label string
-      let google = { credentials: false, token: false };
+      let google = { client: false, token: false };
 
       /* ---------- sidebar tabs ---------- */
       const setTab = next => {
@@ -345,14 +345,12 @@
       const loadGoogle = async () => {
         google = await api('/api/google/status');
         const dot = document.getElementById('google-dot');
-        dot.classList.toggle('ok', google.credentials && google.token);
+        dot.classList.toggle('ok', google.client && google.token);
         dot.title =
-          google.credentials && google.token
-            ? 'Google Drive connected'
-            : 'Google Drive setup needed';
+          google.client && google.token ? 'Google Drive connected' : 'Google Drive not connected';
       };
       document.getElementById('nav-google').addEventListener('click', () => {
-        if (google.credentials && google.token) {
+        if (google.client && google.token) {
           alert('Google Drive is connected.\nToken: ' + google.dataDir + '/token.json');
           return;
         }
@@ -360,37 +358,21 @@
       });
 
       const onboardCard = () => {
-        if (google.credentials && google.token) return null;
+        if (google.client && google.token) return null;
         const card = document.createElement('div');
         card.className = 'onboard';
-        if (!google.credentials) {
+        if (google.client) {
+          // The user path: one click, standard Google consent in the browser
           card.innerHTML = `
-            <strong>Connect Google Drive (essential)</strong>
+            <strong>Connect Google Drive</strong>
             Push chapters to Google Docs, pull edits back, and share with reviewers.
-            <ol>
-              <li>Create a Google Cloud project and enable the <em>Drive</em> and <em>Docs</em> APIs</li>
-              <li>Create an OAuth client ID (type: Desktop app) and download the JSON</li>
-              <li>Save it as <code></code></li>
-            </ol>`;
-          card.querySelector('code').textContent = google.dataDir + '/credentials.json';
-          const btn = document.createElement('button');
-          btn.className = 'primary';
-          btn.textContent = 'Check again';
-          btn.addEventListener('click', async () => {
-            await loadGoogle();
-            render();
-          });
-          card.appendChild(btn);
-        } else {
-          card.innerHTML = `
-            <strong>One step left: authorize Google Drive</strong>
-            Credentials found. Connecting opens Google's consent page in a browser on this machine.
-            `;
+            You'll be taken to Google to sign in and approve access — that's it.
+            <div style="margin-top: 0.6rem"></div>`;
           const btn = document.createElement('button');
           btn.className = 'primary';
           btn.textContent = 'Connect Google Drive';
           btn.addEventListener('click', async () => {
-            btn.textContent = 'Waiting for browser authorization…';
+            btn.textContent = 'Waiting for Google authorization…';
             btn.disabled = true;
             try {
               await api('/api/google/connect', 'POST');
@@ -401,6 +383,25 @@
               btn.textContent = 'Connect Google Drive';
               btn.disabled = false;
             }
+          });
+          card.querySelector('div').appendChild(btn);
+        } else {
+          // Source build with no bundled client — developer setup only
+          card.innerHTML = `
+            <strong>Developer setup: no Google client bundled</strong>
+            This source build has no OAuth client baked in. Provide your own to enable
+            Google Docs sync:
+            <ol>
+              <li>Create a Google Cloud project and enable the <em>Drive</em> and <em>Docs</em> APIs</li>
+              <li>Create an OAuth client ID (type: Desktop app) and download the JSON</li>
+              <li>Save it as <code></code></li>
+            </ol>`;
+          card.querySelector('code').textContent = google.dataDir + '/credentials.json';
+          const btn = document.createElement('button');
+          btn.textContent = 'Check again';
+          btn.addEventListener('click', async () => {
+            await loadGoogle();
+            render();
           });
           card.appendChild(btn);
         }

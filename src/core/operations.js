@@ -11,7 +11,7 @@ import path from 'path';
 import { z } from 'zod';
 import { defineOperation, OperationError } from './registry.js';
 import { getDataDir, STAGES } from '../store.js';
-import { authenticate, getCredentialsPath, getTokenPath } from '../auth.js';
+import { authenticate, getCredentialsPath, getTokenPath, hasGoogleClient } from '../auth.js';
 import { getAllMarkdownFiles, filterExcludedFiles, getFilesToBuild } from '../file-filter.js';
 import { AI_PURPOSES, providerFromUrl, ingestClaudeCode, buildAiReport } from '../ai-audit.js';
 import { analyzeMarkdown, diffStats } from './text-stats.js';
@@ -811,7 +811,7 @@ defineOperation({
 defineOperation({
   name: 'google.status',
   description:
-    'Google Drive integration status: whether OAuth credentials and a cached token are present (canonical home: ~/.draftsync/)',
+    'Google Drive integration status: whether an OAuth client is available (bundled with the app, or a developer credentials file) and whether the user has connected (token cached in ~/.draftsync/)',
   input: z.object({}),
   handler: async () => {
     const check = async f => {
@@ -823,7 +823,7 @@ defineOperation({
       }
     };
     return {
-      credentials: await check(getCredentialsPath()),
+      client: await hasGoogleClient(),
       token: await check(getTokenPath()),
       credentialsPath: getCredentialsPath(),
       dataDir: getDataDir()

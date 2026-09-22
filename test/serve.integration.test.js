@@ -481,7 +481,7 @@ describe('Serve Integration Tests', () => {
     it('should report google integration status shape', async () => {
       const { status, body } = await api('/api/google/status');
       expect(status).toBe(200);
-      expect(typeof body.credentials).toBe('boolean');
+      expect(typeof body.client).toBe('boolean');
       expect(typeof body.token).toBe('boolean');
       expect(typeof body.dataDir).toBe('string');
     });
