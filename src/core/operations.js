@@ -11,6 +11,7 @@ import path from 'path';
 import { z } from 'zod';
 import { defineOperation, OperationError } from './registry.js';
 import { getDataDir, STAGES } from '../store.js';
+import { authenticate, getCredentialsPath, getTokenPath } from '../auth.js';
 import { getAllMarkdownFiles, filterExcludedFiles, getFilesToBuild } from '../file-filter.js';
 import { AI_PURPOSES, providerFromUrl, ingestClaudeCode, buildAiReport } from '../ai-audit.js';
 import { analyzeMarkdown, diffStats } from './text-stats.js';
@@ -107,10 +108,12 @@ defineOperation({
   input: z.object({
     project_id: id,
     name: z.string().min(1).optional(),
-    label: z.string().nullable().optional()
+    label: z.string().nullable().optional(),
+    favorite: z.boolean().optional()
   }),
-  handler: ({ store }, { project_id, ...fields }) => {
+  handler: ({ store }, { project_id, favorite, ...fields }) => {
     projectOf(store, project_id);
+    if (favorite !== undefined) fields.favorite = favorite ? 1 : 0;
     return store.updateProject(project_id, fields);
   }
 });
@@ -744,39 +747,98 @@ defineOperation({
 defineOperation({
   name: 'activity.stream',
   description:
-    'Unified time-ordered stream for a project: timeline activities plus AI ledger events, newest first — the single feed behind the activity panel',
+    'Unified time-ordered stream: timeline activities plus AI ledger events, newest first. Scoped to a project, or global across all projects when project_id is omitted',
   input: z.object({
-    project_id: id,
+    project_id: id.optional(),
     limit: z.coerce.number().int().min(1).max(500).optional()
   }),
   handler: ({ store }, { project_id, limit = 100 }) => {
-    const project = projectOf(store, project_id);
-    const titles = new Map(store.listChapters(project.id).map(c => [c.id, c.title]));
-    const activities = store.listActivities(project.id, { limit }).map(a => ({
-      kind: a.type,
-      at: a.created_at,
-      chapter_id: a.chapter_id,
-      chapterTitle: a.chapterTitle,
-      data: a.data
-    }));
-    const aiEvents = store.listAiEvents(project.id).map(e => ({
-      kind: 'ai_event',
-      at: e.occurred_at || e.created_at,
-      chapter_id: e.chapter_id,
-      chapterTitle: e.chapter_id ? (titles.get(e.chapter_id) ?? null) : null,
-      data: {
-        provider: e.provider,
-        source: e.source,
-        purpose: e.purpose,
-        model: e.model,
-        url: e.url,
-        justification: e.justification
-      }
-    }));
-    const stream = [...activities, ...aiEvents]
+    let activities;
+    let aiEvents;
+    if (project_id) {
+      const project = projectOf(store, project_id);
+      const titles = new Map(store.listChapters(project.id).map(c => [c.id, c.title]));
+      activities = store
+        .listActivities(project.id, { limit })
+        .map(a => ({ ...a, projectName: null }));
+      aiEvents = store
+        .listAiEvents(project.id)
+        .map(e => ({ ...e, projectName: null, chapterTitle: titles.get(e.chapter_id) ?? null }));
+    } else {
+      activities = store.listAllActivities(limit);
+      aiEvents = store.listAllAiEvents();
+    }
+    const stream = [
+      ...activities.map(a => ({
+        kind: a.type,
+        at: a.created_at,
+        chapter_id: a.chapter_id,
+        chapterTitle: a.chapterTitle,
+        projectName: a.projectName ?? null,
+        project_id: a.project_id ?? project_id,
+        data: a.data
+      })),
+      ...aiEvents.map(e => ({
+        kind: 'ai_event',
+        at: e.occurred_at || e.created_at,
+        chapter_id: e.chapter_id,
+        chapterTitle: e.chapterTitle ?? null,
+        projectName: e.projectName ?? null,
+        project_id: e.project_id ?? project_id,
+        data: {
+          provider: e.provider,
+          source: e.source,
+          purpose: e.purpose,
+          model: e.model,
+          url: e.url,
+          justification: e.justification
+        }
+      }))
+    ]
       .sort((x, y) => String(y.at ?? '').localeCompare(String(x.at ?? '')))
       .slice(0, limit);
     return { stream };
+  }
+});
+
+defineOperation({
+  name: 'edition.list_all',
+  description: 'All editions across every project, with project names and chapter counts',
+  input: z.object({}),
+  handler: ({ store }) => ({ editions: store.listAllEditions() })
+});
+
+defineOperation({
+  name: 'google.status',
+  description:
+    'Google Drive integration status: whether OAuth credentials and a cached token are present (canonical home: ~/.draftsync/)',
+  input: z.object({}),
+  handler: async () => {
+    const check = async f => {
+      try {
+        await fs.access(f);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    return {
+      credentials: await check(getCredentialsPath()),
+      token: await check(getTokenPath()),
+      credentialsPath: getCredentialsPath(),
+      dataDir: getDataDir()
+    };
+  }
+});
+
+defineOperation({
+  name: 'google.connect',
+  description:
+    'Start the Google OAuth flow (opens the consent page in the browser on the machine running draftsync); caches the token centrally',
+  input: z.object({}),
+  handler: async () => {
+    await authenticate({ forceLogin: false });
+    return { connected: true };
   }
 });
 

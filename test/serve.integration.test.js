@@ -83,7 +83,7 @@ describe('Serve Integration Tests', () => {
     it('should serve the home page at / and the board at /p/:id', async () => {
       const home = await fetch(base + '/');
       expect(home.status).toBe(200);
-      expect(await home.text()).toContain('all projects');
+      expect(await home.text()).toContain('draftsync');
 
       const board = await fetch(`${base}/p/${project.id}`);
       expect(board.status).toBe(200);
@@ -449,6 +449,41 @@ describe('Serve Integration Tests', () => {
       expect(doc.status).toBe(200);
       expect(doc.body.openapi).toBe('3.1.0');
       expect(doc.body.paths['/api/op/review.receive']).toBeDefined();
+    });
+  });
+
+  describe('dashboard endpoints', () => {
+    it('should toggle project favorites', async () => {
+      const fav = await api(`/api/projects/${project.id}`, 'PATCH', { favorite: true });
+      expect(fav.body.favorite).toBe(1);
+      const unfav = await api(`/api/projects/${project.id}`, 'PATCH', { favorite: false });
+      expect(unfav.body.favorite).toBe(0);
+    });
+
+    it('should list editions globally with project names', async () => {
+      await api(`${p}/editions`, 'POST', { name: 'Global Ed' });
+      const { status, body } = await api('/api/editions');
+      expect(status).toBe(200);
+      const ed = body.editions.find(e => e.name === 'Global Ed');
+      expect(ed.projectName).toBe('my-novel');
+    });
+
+    it('should stream activity globally with project names', async () => {
+      await api(`${p}/chapters`, 'POST', { title: 'Global Ch' });
+      const { body } = await api('/api/activity');
+      const row = body.stream.find(
+        r => r.kind === 'chapter_created' && r.data.title === 'Global Ch'
+      );
+      expect(row.projectName).toBe('my-novel');
+      expect(row.project_id).toBe(project.id);
+    });
+
+    it('should report google integration status shape', async () => {
+      const { status, body } = await api('/api/google/status');
+      expect(status).toBe(200);
+      expect(typeof body.credentials).toBe('boolean');
+      expect(typeof body.token).toBe('boolean');
+      expect(typeof body.dataDir).toBe('string');
     });
   });
 

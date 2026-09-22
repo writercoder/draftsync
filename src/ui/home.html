@@ -8,16 +8,208 @@
     <link rel="stylesheet" href="/assets/tokens.css" />
     <link rel="stylesheet" href="/assets/draftsync.css" />
     <style>
-      header span.tag {
+      body {
+        height: 100vh;
+        display: flex;
+      }
+      /* Left sidebar — navigation + account/integration settings */
+      .sidebar {
+        width: 210px;
+        flex: none;
+        border-right: 1px solid var(--ink-faint);
+        display: flex;
+        flex-direction: column;
+        padding: 1rem 0.8rem;
+        gap: 0.15rem;
+      }
+      .sidebar .brand {
+        display: flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-family: var(--font-authorly);
+        font-size: 1.25rem;
+        padding: 0 0.5rem 0.9rem;
+      }
+      .sidebar .brand img {
+        width: 1.3rem;
+        height: 1.3rem;
+      }
+      .nav-item {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        width: 100%;
+        text-align: left;
+        border: none;
+        background: none;
+        padding: 0.45rem 0.6rem;
+        border-radius: var(--radius);
+        font-size: 0.92rem;
+        color: var(--ink);
+      }
+      .nav-item:hover {
+        background: var(--paper-sunken);
+        border: none;
+      }
+      .nav-item.active {
+        background: var(--infra-wash);
+        color: var(--infra);
+        font-weight: 600;
+      }
+      .sidebar .section {
+        font-size: 0.66rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
         color: var(--ink-soft);
-        font-size: 0.8rem;
+        padding: 1.1rem 0.6rem 0.3rem;
+        margin: 0;
       }
-      main {
-        max-width: 44rem;
-        margin: 0 auto;
-        padding: 1.5rem;
+      .sidebar .spacer {
+        flex: 1;
       }
-      .project {
+      .status-dot {
+        width: 0.5rem;
+        height: 0.5rem;
+        border-radius: 999px;
+        background: var(--ai-orange);
+        margin-left: auto;
+      }
+      .status-dot.ok {
+        background: var(--ai-green);
+      }
+      .soon {
+        margin-left: auto;
+        font-size: 0.65rem;
+        color: var(--ink-soft);
+        border: 1px dashed var(--ink-faint);
+        border-radius: 999px;
+        padding: 0 0.4rem;
+      }
+
+      /* Main area */
+      .main-col {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .topbar {
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+        padding: 0.9rem 1.5rem;
+        border-bottom: 1px solid var(--ink-faint);
+      }
+      .topbar h1 {
+        font-size: 1.05rem;
+        margin: 0;
+        flex: 1;
+      }
+      .content {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.2rem 1.5rem 2rem;
+      }
+
+      /* Onboarding banner */
+      .onboard {
+        border: 1px solid var(--infra);
+        border-radius: var(--radius-large);
+        background: var(--infra-wash);
+        padding: 0.9rem 1.2rem;
+        margin-bottom: 1.2rem;
+        font-size: 0.92rem;
+      }
+      .onboard strong {
+        display: block;
+        margin-bottom: 0.25rem;
+      }
+      .onboard ol {
+        margin: 0.4rem 0 0.6rem;
+        padding-left: 1.3rem;
+      }
+      .onboard li {
+        margin-bottom: 0.2rem;
+      }
+      .onboard code {
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+      }
+
+      /* Filters + project grid */
+      .filters {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+        gap: 0.8rem;
+      }
+      .pcard {
+        background: var(--paper-raised);
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius-large);
+        padding: 0.8rem 1rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.3rem;
+        position: relative;
+      }
+      .pcard:hover {
+        border-color: var(--infra);
+      }
+      .pcard a.name {
+        color: var(--ink);
+        font-weight: 600;
+        font-size: 1rem;
+        text-decoration: none;
+        padding-right: 1.6rem;
+      }
+      .pcard a.name:hover {
+        color: var(--infra);
+      }
+      .pcard .meta {
+        color: var(--ink-soft);
+        font-size: 0.78rem;
+      }
+      .pcard .path {
+        color: var(--ink-soft);
+        font-family: var(--font-mono);
+        font-size: 0.66rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .pcard .star {
+        position: absolute;
+        top: 0.55rem;
+        right: 0.6rem;
+        border: none;
+        background: none;
+        font-size: 1rem;
+        color: var(--ink-faint);
+        padding: 0.1rem;
+        cursor: pointer;
+      }
+      .pcard .star:hover,
+      .pcard .star.on {
+        color: var(--star);
+        border: none;
+      }
+      .pcard .label-chip {
+        align-self: flex-start;
+        font-size: 0.68rem;
+        color: var(--infra);
+        border: 1px dashed var(--ink-faint);
+        border-radius: 999px;
+        padding: 0.05rem 0.5rem;
+        background: none;
+        cursor: pointer;
+      }
+      .row {
         display: flex;
         align-items: baseline;
         gap: 0.8rem;
@@ -25,100 +217,99 @@
         border: 1px solid var(--ink-faint);
         border-radius: var(--radius-large);
         padding: 0.7rem 1rem;
-        margin-bottom: var(--gap);
+        margin-bottom: 0.6rem;
       }
-      .project a.name {
+      .row a.name {
         color: var(--ink);
         font-weight: 600;
         text-decoration: none;
-        font-size: 1rem;
       }
-      .project a.name:hover {
+      .row a.name:hover {
         color: var(--infra);
       }
-      .project .path {
-        color: var(--ink-soft);
-        font-size: 0.75rem;
+      .row .grow {
         flex: 1;
+        color: var(--ink-soft);
+        font-size: 0.8rem;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
       }
-      .project .count {
+      .row .count {
         color: var(--ink-soft);
         font-size: 0.8rem;
         white-space: nowrap;
       }
-      .label-btn {
-        font-size: 0.72rem;
-        color: var(--infra);
-        background: none;
-        border: 1px dashed var(--ink-faint);
-        border-radius: 999px;
-        padding: 0.1rem 0.6rem;
-        cursor: pointer;
-      }
-      .label-btn:hover {
-        border-color: var(--infra);
-      }
       form.add {
         display: flex;
         gap: var(--gap);
-        margin-top: 2rem;
-      }
-      form.add input {
-        flex: 1;
-      }
-      form.add button {
-        background: var(--infra);
-        border-color: var(--infra);
-        color: var(--paper-raised);
-        padding: 0.5rem 1rem;
+        margin-top: 1.4rem;
+        max-width: 36rem;
       }
       .empty {
         color: var(--ink-soft);
-        padding: 2.5rem 0;
-        text-align: center;
+        padding: 2rem 0;
       }
-      .task {
-        display: flex;
-        align-items: baseline;
-        gap: 0.6rem;
-        background: var(--paper-sunken);
-        border-radius: var(--radius);
-        padding: 0.45rem 0.8rem;
-        margin-bottom: 0.4rem;
-        font-size: 0.9rem;
-      }
-      .task .where {
-        color: var(--ink-soft);
-        font-size: 0.78rem;
-        white-space: nowrap;
-      }
-      .task .where a {
+      .st-item .proj {
+        color: var(--infra);
         text-decoration: none;
-      }
-      .task span.text {
-        flex: 1;
+        font-size: 0.72rem;
       }
     </style>
   </head>
   <body>
-    <header>
-      <h1><img class="logo" src="/assets/heron.svg" alt="" /> draftsync</h1>
-      <span class="tag">all projects</span>
-      <span style="flex: 1"></span>
-      <a href="/design">design</a>
-    </header>
-    <main>
-      <div id="tasks-overview"></div>
-      <div id="collections"></div>
-      <div id="groups"></div>
-      <form class="add" id="add-form">
-        <input id="add-path" placeholder="Register a project by absolute path…" required />
-        <button type="submit">Add project</button>
-      </form>
-    </main>
+    <aside class="sidebar">
+      <div class="brand"><img src="/assets/heron.svg" alt="" /> draftsync</div>
+      <button class="nav-item active" data-tab="projects">
+        <svg class="ic"><use href="/assets/icons.svg#doc-plus" /></svg> Projects
+      </button>
+      <button class="nav-item" data-tab="collections">
+        <svg class="ic"><use href="/assets/icons.svg#folder-link" /></svg> Collections
+      </button>
+      <button class="nav-item" data-tab="editions">
+        <svg class="ic"><use href="/assets/icons.svg#layers" /></svg> Editions
+      </button>
+      <div class="spacer"></div>
+      <h2 class="section">Integrations</h2>
+      <button class="nav-item" id="nav-google">
+        <svg class="ic"><use href="/assets/icons.svg#folder-link" /></svg> Google Drive
+        <span class="status-dot" id="google-dot"></span>
+      </button>
+      <div class="nav-item" style="cursor: default">
+        <svg class="ic" style="color: var(--ai-pink)"><use href="/assets/icons.svg#sparkle" /></svg>
+        AI providers <span class="soon">soon</span>
+      </div>
+      <h2 class="section">Workspace</h2>
+      <a class="nav-item" href="/design" style="text-decoration: none">
+        <svg class="ic"><use href="/assets/icons.svg#sliders" /></svg> Design system
+      </a>
+    </aside>
+
+    <div class="main-col">
+      <div class="topbar">
+        <h1 id="tab-title">Projects</h1>
+        <button id="tasks-toggle">
+          <svg class="ic"><use href="/assets/icons.svg#square" /></svg>
+          <span id="tasks-toggle-label">Tasks</span>
+        </button>
+        <button id="panel-toggle">
+          <svg class="ic"><use href="/assets/icons.svg#pulse" /></svg>
+          Activity
+        </button>
+      </div>
+      <div class="layout">
+        <div class="content" id="content"></div>
+
+        <aside class="apanel" id="tpanel">
+          <div class="apanel-head"><strong style="font-size: 0.85rem">Open tasks</strong></div>
+          <div class="apanel-list" id="tpanel-list"></div>
+        </aside>
+        <aside class="apanel" id="apanel">
+          <div class="apanel-head"><strong style="font-size: 0.85rem">Activity</strong></div>
+          <div class="apanel-list" id="apanel-list"></div>
+        </aside>
+      </div>
+    </div>
 
     <script>
       const api = async (path, method = 'GET', body) => {
@@ -131,48 +322,212 @@
         return res.json();
       };
 
-      const loadTasks = async () => {
-        const { tasks } = await api('/api/tasks');
-        const root = document.getElementById('tasks-overview');
-        root.innerHTML = '';
-        if (tasks.length === 0) return;
-        const h = document.createElement('h2');
-        h.textContent = `Open tasks (${tasks.length})`;
-        root.appendChild(h);
-        for (const t of tasks) {
-          const row = document.createElement('div');
-          row.className = 'task';
-          const check = document.createElement('input');
-          check.type = 'checkbox';
-          check.addEventListener('change', async () => {
-            await api(`/api/p/${t.projectId}/tasks/${t.id}`, 'PATCH', { done: true });
-            loadTasks();
-          });
-          const text = document.createElement('span');
-          text.className = 'text';
-          text.textContent = t.text;
-          const where = document.createElement('span');
-          where.className = 'where';
-          where.innerHTML = `<a href="/p/${t.projectId}">${t.projectName}</a>${
-            t.chapterTitle ? ' · ' + t.chapterTitle : ''
-          }`;
-          row.append(check, text, where);
-          root.appendChild(row);
+      let tab = 'projects';
+      let projects = [];
+      let filterLabel = 'all'; // 'all' | 'fav' | label string
+      let google = { credentials: false, token: false };
+
+      /* ---------- sidebar tabs ---------- */
+      const setTab = next => {
+        tab = next;
+        for (const item of document.querySelectorAll('.nav-item[data-tab]')) {
+          item.classList.toggle('active', item.dataset.tab === next);
         }
+        document.getElementById('tab-title').textContent =
+          next === 'projects' ? 'Projects' : next === 'collections' ? 'Collections' : 'Editions';
+        render();
+      };
+      for (const item of document.querySelectorAll('.nav-item[data-tab]')) {
+        item.addEventListener('click', () => setTab(item.dataset.tab));
+      }
+
+      /* ---------- google onboarding ---------- */
+      const loadGoogle = async () => {
+        google = await api('/api/google/status');
+        const dot = document.getElementById('google-dot');
+        dot.classList.toggle('ok', google.credentials && google.token);
+        dot.title =
+          google.credentials && google.token
+            ? 'Google Drive connected'
+            : 'Google Drive setup needed';
+      };
+      document.getElementById('nav-google').addEventListener('click', () => {
+        if (google.credentials && google.token) {
+          alert('Google Drive is connected.\nToken: ' + google.dataDir + '/token.json');
+          return;
+        }
+        setTab('projects');
+      });
+
+      const onboardCard = () => {
+        if (google.credentials && google.token) return null;
+        const card = document.createElement('div');
+        card.className = 'onboard';
+        if (!google.credentials) {
+          card.innerHTML = `
+            <strong>Connect Google Drive (essential)</strong>
+            Push chapters to Google Docs, pull edits back, and share with reviewers.
+            <ol>
+              <li>Create a Google Cloud project and enable the <em>Drive</em> and <em>Docs</em> APIs</li>
+              <li>Create an OAuth client ID (type: Desktop app) and download the JSON</li>
+              <li>Save it as <code></code></li>
+            </ol>`;
+          card.querySelector('code').textContent = google.dataDir + '/credentials.json';
+          const btn = document.createElement('button');
+          btn.className = 'primary';
+          btn.textContent = 'Check again';
+          btn.addEventListener('click', async () => {
+            await loadGoogle();
+            render();
+          });
+          card.appendChild(btn);
+        } else {
+          card.innerHTML = `
+            <strong>One step left: authorize Google Drive</strong>
+            Credentials found. Connecting opens Google's consent page in a browser on this machine.
+            `;
+          const btn = document.createElement('button');
+          btn.className = 'primary';
+          btn.textContent = 'Connect Google Drive';
+          btn.addEventListener('click', async () => {
+            btn.textContent = 'Waiting for browser authorization…';
+            btn.disabled = true;
+            try {
+              await api('/api/google/connect', 'POST');
+              await loadGoogle();
+              render();
+            } catch (e) {
+              alert(e.message);
+              btn.textContent = 'Connect Google Drive';
+              btn.disabled = false;
+            }
+          });
+          card.appendChild(btn);
+        }
+        return card;
       };
 
-      const loadCollections = async () => {
+      /* ---------- projects tab ---------- */
+      const chip = (label, active, onclick) => {
+        const el = document.createElement('button');
+        el.className = 'chipbtn' + (active ? ' active' : '');
+        el.textContent = label;
+        el.addEventListener('click', onclick);
+        return el;
+      };
+
+      const renderProjects = root => {
+        const onboard = onboardCard();
+        if (onboard) root.appendChild(onboard);
+
+        const labels = [...new Set(projects.map(p => p.label).filter(Boolean))].sort();
+        const filters = document.createElement('div');
+        filters.className = 'filters';
+        filters.appendChild(chip('All', filterLabel === 'all', () => setFilter('all')));
+        filters.appendChild(chip('★ Favourites', filterLabel === 'fav', () => setFilter('fav')));
+        for (const label of labels) {
+          filters.appendChild(chip(label, filterLabel === label, () => setFilter(label)));
+        }
+        root.appendChild(filters);
+
+        const visible = projects.filter(p =>
+          filterLabel === 'all'
+            ? true
+            : filterLabel === 'fav'
+              ? p.favorite
+              : p.label === filterLabel
+        );
+        const grid = document.createElement('div');
+        grid.className = 'grid';
+        for (const p of visible) {
+          const card = document.createElement('div');
+          card.className = 'pcard';
+
+          const star = document.createElement('button');
+          star.className = 'star' + (p.favorite ? ' on' : '');
+          star.textContent = p.favorite ? '★' : '☆';
+          star.title = p.favorite ? 'Unfavourite' : 'Favourite';
+          star.addEventListener('click', async () => {
+            await api(`/api/projects/${p.id}`, 'PATCH', { favorite: !p.favorite });
+            load();
+          });
+          card.appendChild(star);
+
+          const name = document.createElement('a');
+          name.className = 'name';
+          name.href = `/p/${p.id}`;
+          name.textContent = p.name;
+          card.appendChild(name);
+
+          const labelBtn = document.createElement('button');
+          labelBtn.className = 'label-chip';
+          labelBtn.textContent = p.label || '+ type';
+          labelBtn.title = 'Set project type (empty to clear)';
+          labelBtn.addEventListener('click', async () => {
+            const value = prompt(
+              'Project type (e.g. "Short stories"; empty to clear):',
+              p.label || ''
+            );
+            if (value === null) return;
+            await api(`/api/projects/${p.id}`, 'PATCH', { label: value.trim() || null });
+            load();
+          });
+          card.appendChild(labelBtn);
+
+          const meta = document.createElement('div');
+          meta.className = 'meta';
+          meta.textContent = `${p.chapterCount} chapter${p.chapterCount === 1 ? '' : 's'}`;
+          card.appendChild(meta);
+
+          const pathEl = document.createElement('div');
+          pathEl.className = 'path';
+          pathEl.textContent = p.path;
+          card.appendChild(pathEl);
+
+          grid.appendChild(card);
+        }
+        root.appendChild(grid);
+        if (visible.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = 'No projects match this filter.';
+          root.appendChild(empty);
+        }
+
+        const form = document.createElement('form');
+        form.className = 'add';
+        const input = document.createElement('input');
+        input.placeholder = 'Register a project by absolute path…';
+        input.required = true;
+        const submit = document.createElement('button');
+        submit.className = 'primary';
+        submit.type = 'submit';
+        submit.textContent = 'Add project';
+        form.append(input, submit);
+        form.addEventListener('submit', async e => {
+          e.preventDefault();
+          try {
+            await api('/api/projects', 'POST', { path: input.value });
+            load();
+          } catch (err) {
+            alert(err.message);
+          }
+        });
+        root.appendChild(form);
+      };
+
+      const setFilter = f => {
+        filterLabel = f;
+        render();
+      };
+
+      /* ---------- collections tab ---------- */
+      const renderCollections = async root => {
         const { collections } = await api('/api/collections');
-        const root = document.getElementById('collections');
-        root.innerHTML = '';
-        const h = document.createElement('h2');
-        h.style.display = 'flex';
-        h.style.justifyContent = 'space-between';
-        const title = document.createElement('span');
-        title.textContent = 'Collections';
+        const bar = document.createElement('div');
+        bar.className = 'filters';
         const add = document.createElement('button');
-        add.className = 'label-btn';
-        add.textContent = '+ new collection';
+        add.textContent = '+ New collection';
         add.addEventListener('click', async () => {
           const name = prompt('Collection name (e.g. "Short Stories Vol. 1"):');
           if (!name || !name.trim()) return;
@@ -183,106 +538,259 @@
             alert(e.message);
           }
         });
-        h.append(title, add);
-        root.appendChild(h);
+        bar.appendChild(add);
+        root.appendChild(bar);
         for (const c of collections) {
           const row = document.createElement('div');
-          row.className = 'project';
+          row.className = 'row';
           const name = document.createElement('a');
           name.className = 'name';
           name.href = `/c/${c.id}`;
           name.textContent = c.name;
-          const desc = document.createElement('span');
-          desc.className = 'path';
-          desc.textContent = c.description || '';
+          const grow = document.createElement('span');
+          grow.className = 'grow';
+          grow.textContent = c.description || '';
           const count = document.createElement('span');
           count.className = 'count';
           count.textContent = `${c.projectCount} stor${c.projectCount === 1 ? 'y' : 'ies'} · ${c.editionCount} edition${c.editionCount === 1 ? '' : 's'}`;
-          row.append(name, desc, count);
+          row.append(name, grow, count);
           root.appendChild(row);
         }
         if (collections.length === 0) {
-          const hint = document.createElement('div');
-          hint.className = 'empty';
-          hint.style.padding = '0.6rem 0';
-          hint.textContent =
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent =
             'No collections yet — a collection gathers projects (e.g. short stories) into one work.';
-          root.appendChild(hint);
+          root.appendChild(empty);
         }
       };
 
-      const load = async () => {
-        const { projects } = await api('/api/projects');
-        const groups = new Map();
-        for (const p of projects) {
-          const key = p.label || 'Unlabeled';
-          if (!groups.has(key)) groups.set(key, []);
-          groups.get(key).push(p);
-        }
-        const root = document.getElementById('groups');
-        root.innerHTML = '';
-        if (projects.length === 0) {
-          root.innerHTML =
-            '<div class="empty">No projects yet — run a draftsync command in a project directory, or register one below.</div>';
-          return;
-        }
-        for (const [label, group] of groups) {
-          const h = document.createElement('h2');
-          h.textContent = label;
-          root.appendChild(h);
-          for (const p of group) {
-            const row = document.createElement('div');
-            row.className = 'project';
-
-            const name = document.createElement('a');
-            name.className = 'name';
-            name.href = `/p/${p.id}`;
-            name.textContent = p.name;
-            row.appendChild(name);
-
-            const labelBtn = document.createElement('button');
-            labelBtn.className = 'label-btn';
-            labelBtn.textContent = p.label || '+ label';
-            labelBtn.title = 'Set label (empty to clear)';
-            labelBtn.addEventListener('click', async () => {
-              const value = prompt('Label for this project (empty to clear):', p.label || '');
-              if (value === null) return;
-              await api(`/api/projects/${p.id}`, 'PATCH', { label: value.trim() || null });
-              load();
-            });
-            row.appendChild(labelBtn);
-
-            const pathEl = document.createElement('span');
-            pathEl.className = 'path';
-            pathEl.textContent = p.path;
-            row.appendChild(pathEl);
-
-            const count = document.createElement('span');
-            count.className = 'count';
-            count.textContent = `${p.chapterCount} chapter${p.chapterCount === 1 ? '' : 's'}`;
-            row.appendChild(count);
-
-            root.appendChild(row);
+      /* ---------- editions tab ---------- */
+      const renderEditionsTab = async root => {
+        const { editions } = await api('/api/editions');
+        for (const e of editions) {
+          const project = projects.find(p => p.id === e.project_id);
+          const row = document.createElement('div');
+          row.className = 'row';
+          const name = document.createElement('span');
+          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          icon.setAttribute('class', 'ic');
+          icon.setAttribute('style', 'color: var(--infra)');
+          const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+          use.setAttribute('href', '/assets/icons.svg#layers');
+          icon.appendChild(use);
+          const strongEl = document.createElement('strong');
+          strongEl.textContent = ' ' + e.name;
+          name.append(icon, strongEl);
+          const grow = document.createElement('a');
+          grow.className = 'grow';
+          grow.href = project ? `/p/${project.id}` : '#';
+          grow.style.textDecoration = 'none';
+          grow.textContent = e.projectName;
+          const count = document.createElement('span');
+          count.className = 'count';
+          count.textContent = `${e.chapterCount} chapter${e.chapterCount === 1 ? '' : 's'}`;
+          const dl = document.createElement('span');
+          dl.className = 'count';
+          if (project) {
+            const epub = document.createElement('a');
+            epub.href = `/api/p/${project.id}/export/epub?edition=${e.id}`;
+            epub.textContent = 'EPUB';
+            epub.setAttribute('download', '');
+            const docx = document.createElement('a');
+            docx.href = `/api/p/${project.id}/export/docx?edition=${e.id}`;
+            docx.textContent = 'DOCX';
+            docx.setAttribute('download', '');
+            dl.append(epub, document.createTextNode(' · '), docx);
           }
+          row.append(name, grow, count, dl);
+          root.appendChild(row);
+        }
+        if (editions.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent = 'No editions yet — create them from a project board.';
+          root.appendChild(empty);
         }
       };
 
-      document.getElementById('add-form').addEventListener('submit', async e => {
-        e.preventDefault();
-        try {
-          await api('/api/projects', 'POST', {
-            path: document.getElementById('add-path').value
-          });
-          document.getElementById('add-path').value = '';
-          load();
-        } catch (err) {
-          alert(err.message);
-        }
-      });
+      const render = async () => {
+        const root = document.getElementById('content');
+        root.innerHTML = '';
+        if (tab === 'projects') renderProjects(root);
+        if (tab === 'collections') await renderCollections(root);
+        if (tab === 'editions') await renderEditionsTab(root);
+      };
 
-      load();
-      loadTasks();
-      loadCollections();
+      /* ---------- right flyouts: tasks + activity ---------- */
+      const setPanelMode = mode => {
+        document.body.classList.toggle('panel-activity', mode === 'activity');
+        document.body.classList.toggle('panel-tasks', mode === 'tasks');
+        localStorage.setItem('draftsync-home-panel', mode || '');
+        if (mode === 'activity') loadStream();
+        if (mode === 'tasks') renderTasksPanel();
+      };
+      const panelMode = () =>
+        document.body.classList.contains('panel-activity')
+          ? 'activity'
+          : document.body.classList.contains('panel-tasks')
+            ? 'tasks'
+            : null;
+      document
+        .getElementById('panel-toggle')
+        .addEventListener('click', () =>
+          setPanelMode(panelMode() === 'activity' ? null : 'activity')
+        );
+      document
+        .getElementById('tasks-toggle')
+        .addEventListener('click', () => setPanelMode(panelMode() === 'tasks' ? null : 'tasks'));
+
+      const renderTasksPanel = async () => {
+        const { tasks } = await api('/api/tasks');
+        const list = document.getElementById('tpanel-list');
+        list.innerHTML = '';
+        document.getElementById('tasks-toggle-label').textContent =
+          tasks.length > 0 ? `Tasks (${tasks.length})` : 'Tasks';
+        for (const t of tasks) {
+          const row = document.createElement('div');
+          row.className = 'ptask';
+          const check = document.createElement('input');
+          check.type = 'checkbox';
+          check.addEventListener('change', async () => {
+            await api(`/api/p/${t.projectId}/tasks/${t.id}`, 'PATCH', { done: true });
+            renderTasksPanel();
+          });
+          const txt = document.createElement('span');
+          txt.className = 'txt';
+          txt.textContent = t.text;
+          const where = document.createElement('a');
+          where.className = 'where';
+          where.href = `/p/${t.projectId}`;
+          where.style.color = 'var(--infra)';
+          where.style.textDecoration = 'none';
+          where.textContent = t.projectName + (t.chapterTitle ? ` · ${t.chapterTitle}` : '');
+          row.append(check, txt, where);
+          list.appendChild(row);
+        }
+        if (tasks.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'ptask';
+          empty.innerHTML =
+            '<span class="txt" style="color: var(--ink-soft)">No open tasks anywhere. Enjoy the quiet.</span>';
+          list.appendChild(empty);
+        }
+      };
+
+      const KIND_ICON = {
+        file_edited: 'edit',
+        chapter_created: 'doc-plus',
+        edition_created: 'layers',
+        review_sent: 'plane',
+        review_received: 'inbox',
+        task_created: 'square',
+        task_completed: 'square-check',
+        ai_event: 'sparkle'
+      };
+      const dayLabel = iso => {
+        const day = String(iso || '').slice(0, 10);
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const yesterday = new Date(now.getTime() - 86400e3).toISOString().slice(0, 10);
+        if (day === today) return 'Today';
+        if (day === yesterday) return 'Yesterday';
+        return new Date(day + 'T12:00:00').toLocaleDateString(undefined, {
+          month: 'short',
+          day: 'numeric'
+        });
+      };
+      const streamText = row => {
+        const d = row.data || {};
+        switch (row.kind) {
+          case 'file_edited':
+            return `${row.chapterTitle || d.file} edited +${d.linesAdded} −${d.linesRemoved}`;
+          case 'chapter_created':
+            return `${d.title} ${d.imported ? 'imported' : 'added'}`;
+          case 'edition_created':
+            return `edition ${d.name} created`;
+          case 'review_sent':
+            return `to ${d.reviewer}` + (row.chapterTitle ? ` — ${row.chapterTitle}` : '');
+          case 'review_received':
+            return `from ${d.reviewer}` + (row.chapterTitle ? ` — ${row.chapterTitle}` : '');
+          case 'task_created':
+          case 'task_completed':
+            return d.text;
+          case 'ai_event':
+            return (
+              `${d.purpose} — ${d.provider}` + (row.chapterTitle ? ` · ${row.chapterTitle}` : '')
+            );
+          default:
+            return row.kind;
+        }
+      };
+      const loadStream = async () => {
+        const { stream } = await api('/api/activity?limit=60');
+        const list = document.getElementById('apanel-list');
+        list.innerHTML = '';
+        let currentDay = null;
+        for (const row of stream) {
+          const day = dayLabel(row.at);
+          if (day !== currentDay) {
+            currentDay = day;
+            const head = document.createElement('div');
+            head.className = 'st-day';
+            head.textContent = day;
+            list.appendChild(head);
+          }
+          const item = document.createElement('div');
+          item.className = 'st-item';
+          item.title = row.kind.replace(/_/g, ' ');
+          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          icon.setAttribute('class', 'ic' + (row.kind === 'ai_event' ? ' ai' : ''));
+          const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+          use.setAttribute('href', `/assets/icons.svg#${KIND_ICON[row.kind] || 'pulse'}`);
+          icon.appendChild(use);
+          const what = document.createElement('span');
+          what.className = 'what';
+          what.textContent = streamText(row);
+          if (row.kind === 'ai_event') {
+            const mark = document.createElement('span');
+            if (row.data.purpose === 'prose-suggestion' && !row.data.justification) {
+              mark.className = 'warn';
+              mark.textContent = ' ⚠';
+            } else if (row.data.justification) {
+              mark.className = 'ok';
+              mark.textContent = ' ✓';
+            }
+            what.appendChild(mark);
+          }
+          if (row.projectName) {
+            const proj = document.createElement('a');
+            proj.className = 'proj';
+            proj.href = `/p/${row.project_id}`;
+            proj.textContent = row.projectName;
+            what.appendChild(document.createTextNode(' '));
+            what.appendChild(proj);
+          }
+          item.append(icon, what);
+          list.appendChild(item);
+        }
+      };
+
+      /* ---------- boot ---------- */
+      const load = async () => {
+        projects = (await api('/api/projects')).projects.sort(
+          (a, b) => b.favorite - a.favorite || a.name.localeCompare(b.name)
+        );
+        render();
+        renderTasksPanel();
+      };
+
+      (async () => {
+        await loadGoogle();
+        await load();
+        const saved = localStorage.getItem('draftsync-home-panel');
+        if (saved) setPanelMode(saved);
+      })();
     </script>
   </body>
 </html>

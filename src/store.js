@@ -209,6 +209,9 @@ export function openStore(dataDir = getDataDir()) {
       `);
     }
   }
+  if (!projectCols.includes('favorite')) {
+    db.exec('ALTER TABLE projects ADD COLUMN favorite INTEGER NOT NULL DEFAULT 0');
+  }
   const chapterCols = db
     .prepare('PRAGMA table_info(chapters)')
     .all()
@@ -283,7 +286,7 @@ export class Store {
    * @returns {Object|undefined} Updated project
    */
   updateProject(id, fields) {
-    const allowed = ['name', 'label'];
+    const allowed = ['name', 'label', 'favorite'];
     const updates = allowed.filter(k => fields[k] !== undefined);
     if (updates.length > 0) {
       const set = updates.map(k => `${k} = ?`).join(', ');
@@ -292,6 +295,59 @@ export class Store {
         .run(...updates.map(k => fields[k]), id);
     }
     return this.getProject(id);
+  }
+
+  /**
+   * All editions across projects, with project names and chapter counts
+   *
+   * @returns {Array<Object>} Edition rows with projectName, chapterCount
+   */
+  listAllEditions() {
+    return this.db
+      .prepare(
+        `SELECT e.*, p.name AS projectName, COUNT(ec.chapter_id) AS chapterCount
+         FROM editions e
+         JOIN projects p ON p.id = e.project_id
+         LEFT JOIN edition_chapters ec ON ec.edition_id = e.id
+         GROUP BY e.id ORDER BY p.name, e.name`
+      )
+      .all();
+  }
+
+  /**
+   * Activities across all projects, newest first, with names
+   *
+   * @param {number} [limit=100] - Max rows
+   * @returns {Array<Object>} Activity rows (data parsed)
+   */
+  listAllActivities(limit = 100) {
+    return this.db
+      .prepare(
+        `SELECT a.*, p.name AS projectName, c.title AS chapterTitle
+         FROM activities a
+         JOIN projects p ON p.id = a.project_id
+         LEFT JOIN chapters c ON c.id = a.chapter_id
+         ORDER BY a.id DESC LIMIT ?`
+      )
+      .all(limit)
+      .map(r => ({ ...r, data: JSON.parse(r.data) }));
+  }
+
+  /**
+   * AI events across all projects, newest first, with names
+   *
+   * @returns {Array<Object>} Event rows with projectName, chapterTitle
+   */
+  listAllAiEvents() {
+    return this.db
+      .prepare(
+        `SELECT e.*, p.name AS projectName, c.title AS chapterTitle
+         FROM ai_events e
+         JOIN projects p ON p.id = e.project_id
+         LEFT JOIN chapters c ON c.id = e.chapter_id
+         ORDER BY COALESCE(e.occurred_at, e.created_at) DESC`
+      )
+      .all();
   }
 
   /**

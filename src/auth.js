@@ -14,6 +14,8 @@ import crypto from 'crypto';
 import path from 'path';
 import { spawn } from 'child_process';
 import chalk from 'chalk';
+import { existsSync } from 'fs';
+import { getDataDir } from './store.js';
 
 // Required OAuth2 scopes.
 // drive.file (non-sensitive) only grants access to files this app created —
@@ -30,19 +32,30 @@ const AUTH_FLOW_TIMEOUT_MS = 5 * 60 * 1000;
 /**
  * Path to the OAuth client credentials file
  *
+ * Canonical home is ~/.draftsync/credentials.json (works for the global
+ * server and every project); a credentials.json in the current
+ * directory is honored as a legacy fallback.
+ *
  * @returns {string} Absolute path to credentials.json
  */
 export function getCredentialsPath() {
+  const central = path.join(getDataDir(), 'credentials.json');
+  if (existsSync(central)) return central;
   return path.join(process.cwd(), 'credentials.json');
 }
 
 /**
- * Path to the cached token file
+ * Path to the cached token file (canonical: ~/.draftsync/token.json;
+ * legacy .token.json in the current directory read as fallback)
  *
- * @returns {string} Absolute path to .token.json
+ * @returns {string} Absolute path to the token file
  */
 export function getTokenPath() {
-  return path.join(process.cwd(), '.token.json');
+  const central = path.join(getDataDir(), 'token.json');
+  if (existsSync(central)) return central;
+  const legacy = path.join(process.cwd(), '.token.json');
+  if (existsSync(legacy)) return legacy;
+  return central;
 }
 
 /**

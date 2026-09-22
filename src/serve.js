@@ -127,6 +127,21 @@ export function createDraftsyncServer({ store }) {
 
       // Global
       if (req.method === 'GET' && p === '/api/tasks') return send(200, await run('task.list_open'));
+      if (req.method === 'GET' && p === '/api/activity') {
+        return send(
+          200,
+          await run('activity.stream', { limit: url.searchParams.get('limit') || undefined })
+        );
+      }
+      if (req.method === 'GET' && p === '/api/editions') {
+        return send(200, await run('edition.list_all'));
+      }
+      if (req.method === 'GET' && p === '/api/google/status') {
+        return send(200, await run('google.status'));
+      }
+      if (req.method === 'POST' && p === '/api/google/connect') {
+        return send(200, await run('google.connect'));
+      }
       if (req.method === 'GET' && p === '/api/projects') {
         return send(200, await run('project.list'));
       }

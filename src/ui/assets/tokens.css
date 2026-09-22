@@ -37,6 +37,7 @@
 
   /* Signals (zone-independent) */
   --danger: #b5342e;
+  --star: #c9922a;
 
   /* Type */
   --font-ui: 15px/1.5 -apple-system, 'Segoe UI', system-ui, sans-serif;
@@ -77,5 +78,6 @@
     --ai-wash: #2b2026;
 
     --danger: #e06054;
+    --star: #e0b25e;
   }
 }
