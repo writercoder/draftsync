@@ -131,7 +131,12 @@ export function createDraftsyncServer({ store }) {
       if (req.method === 'GET' && p === '/api/activity') {
         return send(
           200,
-          await run('activity.stream', { limit: url.searchParams.get('limit') || undefined })
+          await run('activity.stream', {
+            limit: url.searchParams.get('limit') || undefined,
+            project_id: url.searchParams.get('project') || undefined,
+            collection_id: url.searchParams.get('collection') || undefined,
+            edition_id: url.searchParams.get('edition') || undefined
+          })
         );
       }
       if (req.method === 'POST' && p === '/api/scan') {

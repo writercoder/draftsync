@@ -820,12 +820,29 @@ defineOperation({
 defineOperation({
   name: 'activity.stream',
   description:
-    'Unified time-ordered stream: timeline activities plus AI ledger events, newest first. Scoped to a project, or global across all projects when project_id is omitted',
+    'Unified time-ordered stream: timeline activities plus AI ledger events, newest first. Scope with project_id, collection_id (member projects), or edition_id (rows about its chapters or the edition itself); global when unscoped',
   input: z.object({
     project_id: id.optional(),
+    collection_id: id.optional(),
+    edition_id: id.optional(),
     limit: z.coerce.number().int().min(1).max(500).optional()
   }),
-  handler: ({ store }, { project_id, limit = 100 }) => {
+  handler: ({ store }, { project_id, collection_id, edition_id, limit = 100 }) => {
+    // Edition scope: resolve to its project, then filter to rows about
+    // the edition's chapters or the edition itself
+    let editionChapterIds = null;
+    let editionRow = null;
+    if (edition_id) {
+      editionRow = must(store.getEdition(edition_id), 'edition');
+      project_id = editionRow.project_id;
+      editionChapterIds = new Set(store.listEditionChapters(edition_id).map(c => c.id));
+    }
+    // Collection scope: global query filtered to member projects
+    let memberIds = null;
+    if (!project_id && collection_id) {
+      collectionOf(store, collection_id);
+      memberIds = new Set(store.listCollectionProjects(collection_id).map(prj => prj.id));
+    }
     let activities;
     let aiEvents;
     if (project_id) {
@@ -841,7 +858,7 @@ defineOperation({
       activities = store.listAllActivities(limit);
       aiEvents = store.listAllAiEvents();
     }
-    const stream = [
+    let stream = [
       ...activities.map(a => ({
         kind: a.type,
         at: a.created_at,
@@ -867,7 +884,16 @@ defineOperation({
           justification: e.justification
         }
       }))
-    ]
+    ];
+    if (memberIds) stream = stream.filter(row => memberIds.has(row.project_id));
+    if (editionChapterIds) {
+      stream = stream.filter(
+        row =>
+          (row.chapter_id && editionChapterIds.has(row.chapter_id)) ||
+          row.data?.edition_id === editionRow.id
+      );
+    }
+    stream = stream
       .sort((x, y) => String(y.at ?? '').localeCompare(String(x.at ?? '')))
       .slice(0, limit);
     return { stream, seenAt: store.getSetting(seenKey(project_id)) };

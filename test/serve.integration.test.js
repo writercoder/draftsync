@@ -534,6 +534,53 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('scoped activity stream', () => {
+    it('should filter by collection membership and edition targets', async () => {
+      // Two projects; only one joins the collection
+      const otherDir = join(tempDir, 'other-story');
+      mkdirSync(join(otherDir, 'content'), { recursive: true });
+      const other = await api('/api/projects', 'POST', { path: otherDir });
+      await api(`/api/op/chapter.create`, 'POST', {
+        project_id: other.body.id,
+        title: 'Outside Ch'
+      });
+
+      await api(`${p}/import`, 'POST');
+      const board = await api(`${p}/board`);
+      const opening = board.body.chapters.find(c => c.file === 'content/01-opening.md');
+      const middle = board.body.chapters.find(c => c.file === 'content/02-middle.md');
+
+      const col = await api('/api/collections', 'POST', { name: 'Scope Col' });
+      await api(`/api/collections/${col.body.id}/projects`, 'PUT', {
+        project_ids: [project.id]
+      });
+
+      const colStream = await api(`/api/activity?collection=${col.body.id}`);
+      expect(colStream.body.stream.length).toBeGreaterThan(0);
+      expect(colStream.body.stream.every(r => r.project_id === project.id)).toBe(true);
+      expect(colStream.body.stream.some(r => r.data?.title === 'Outside Ch')).toBe(false);
+
+      // Edition scope: only rows about its chapters or the edition itself
+      const edition = await api(`${p}/editions`, 'POST', { name: 'Scope Ed' });
+      await api(`${p}/editions/${edition.body.id}/chapters`, 'PUT', {
+        chapter_ids: [opening.id]
+      });
+      await api(`${p}/tasks`, 'POST', { text: 'on opening', chapter_id: opening.id });
+      await api(`${p}/tasks`, 'POST', { text: 'on middle', chapter_id: middle.id });
+      await api(`${p}/reviews/request`, 'POST', {
+        edition_id: edition.body.id,
+        reviewer_name: 'Scope R',
+        reviewer_email: 'scope@example.com'
+      });
+
+      const edStream = await api(`/api/activity?edition=${edition.body.id}`);
+      const texts = edStream.body.stream.map(r => r.data?.text || r.data?.reviewer || r.kind);
+      expect(texts).toContain('on opening');
+      expect(texts).toContain('Scope R');
+      expect(texts).not.toContain('on middle');
+    });
+  });
+
   describe('read state and notifications', () => {
     it('should count unseen, mark seen, and expose seenAt in the stream', async () => {
       // Before any cursor exists, everything is calm (nothing "new")

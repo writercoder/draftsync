@@ -334,7 +334,16 @@
           <div class="apanel-list" id="tpanel-list"></div>
         </aside>
         <aside class="apanel" id="apanel">
-          <div class="apanel-head"><strong style="font-size: 0.85rem">Activity</strong></div>
+          <div class="apanel-head">
+            <button class="chipbtn active" data-cat="all">All</button>
+            <button class="chipbtn" data-cat="files">Files</button>
+            <button class="chipbtn" data-cat="reviews">Reviews</button>
+            <button class="chipbtn" data-cat="tasks">Tasks</button>
+            <button class="chipbtn ai" data-cat="ai">AI</button>
+            <select id="scope-select" style="width: 100%; margin-top: 0.3rem; font-size: 0.8rem">
+              <option value="">Everywhere</option>
+            </select>
+          </div>
           <div class="apanel-list" id="apanel-list"></div>
         </aside>
       </div>
@@ -713,6 +722,59 @@
         }
       };
 
+      const CAT = {
+        file_edited: 'files',
+        chapter_created: 'files',
+        edition_created: 'files',
+        review_sent: 'reviews',
+        review_received: 'reviews',
+        task_created: 'tasks',
+        task_completed: 'tasks',
+        ai_event: 'ai'
+      };
+      let panelCat = 'all';
+      let panelScope = ''; // '' | p:<id> | c:<id> | e:<id>
+      let scopeLoaded = false;
+
+      const loadScopeOptions = async () => {
+        if (scopeLoaded) return;
+        scopeLoaded = true;
+        const select = document.getElementById('scope-select');
+        const [{ collections }, { editions }] = await Promise.all([
+          api('/api/collections'),
+          api('/api/editions')
+        ]);
+        const group = (label, items, prefix, name) => {
+          if (items.length === 0) return;
+          const optgroup = document.createElement('optgroup');
+          optgroup.label = label;
+          for (const item of items) {
+            const option = document.createElement('option');
+            option.value = `${prefix}:${item.id}`;
+            option.textContent = name(item);
+            optgroup.appendChild(option);
+          }
+          select.appendChild(optgroup);
+        };
+        group('Projects', projects, 'p', x => x.name);
+        group('Collections', collections, 'c', x => x.name);
+        group('Editions', editions, 'e', x => `${x.name} — ${x.projectName}`);
+        select.addEventListener('change', () => {
+          panelScope = select.value;
+          loadStream();
+        });
+      };
+
+      for (const chipEl of document.querySelectorAll('#apanel .chipbtn')) {
+        chipEl.addEventListener('click', () => {
+          panelCat = chipEl.dataset.cat;
+          for (const c of document.querySelectorAll('#apanel .chipbtn')) {
+            c.classList.toggle('active', c === chipEl);
+          }
+          loadStream();
+        });
+      }
+
       const KIND_ICON = {
         file_edited: 'edit',
         chapter_created: 'doc-plus',
@@ -767,7 +829,14 @@
       };
 
       const loadStream = async () => {
-        const { stream, seenAt } = await api('/api/activity?limit=60');
+        await loadScopeOptions();
+        const params = new URLSearchParams({ limit: '60' });
+        if (panelScope.startsWith('p:')) params.set('project', panelScope.slice(2));
+        if (panelScope.startsWith('c:')) params.set('collection', panelScope.slice(2));
+        if (panelScope.startsWith('e:')) params.set('edition', panelScope.slice(2));
+        const res = await api('/api/activity?' + params);
+        const seenAt = res.seenAt;
+        const stream = res.stream.filter(r => panelCat === 'all' || CAT[r.kind] === panelCat);
         const list = document.getElementById('apanel-list');
         list.innerHTML = '';
         let currentDay = null;
@@ -822,8 +891,11 @@
           item.append(icon, what);
           list.appendChild(item);
         }
-        await api('/api/activity/seen', 'POST');
-        refreshUnseen();
+        // Filtering hides rows — only an unfiltered look marks things seen
+        if (panelScope === '' && panelCat === 'all') {
+          await api('/api/activity/seen', 'POST');
+          refreshUnseen();
+        }
       };
 
       /* ---------- this week ---------- */
