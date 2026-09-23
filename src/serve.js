@@ -336,6 +336,9 @@ export function createDraftsyncServer({ store }) {
           return send(200, await run('edition.delete', { project_id, edition_id }));
         }
       }
+      if (route === '/kindle' && req.method === 'POST') {
+        return send(200, await run('kindle.send', { project_id, ...(await readBody(req)) }));
+      }
       if ((x = r(/^\/export\/(epub|docx|pdf)$/)) && req.method === 'GET') {
         return await streamExport('export.project', {
           project_id,

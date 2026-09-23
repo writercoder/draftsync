@@ -281,6 +281,7 @@
           <a class="menu-item" id="dl-docx" download>DOCX</a>
           <a class="menu-item" id="dl-pdf" download>PDF</a>
           <div class="menu-sep"></div>
+          <button class="menu-item" id="dl-kindle">Send to Kindle</button>
           <button class="menu-item" id="dl-editions">Edition builds… (Editions)</button>
         </div>
       </div>
@@ -1149,6 +1150,30 @@
       document.getElementById('am-import').addEventListener('click', doImport);
       document.getElementById('am-ai').addEventListener('click', openAi);
       document.getElementById('dl-editions').addEventListener('click', () => openEditions(false));
+      document.getElementById('dl-kindle').addEventListener('click', async () => {
+        try {
+          let result = await api(`${base}/kindle`, 'POST', {});
+          if (result.method === 'need-email') {
+            const email = prompt(
+              'Your Kindle email (Amazon → Manage Devices → Personal Document Settings),\ne.g. name_123@kindle.com.\nRemember to approve your own address as an allowed sender there.'
+            );
+            if (!email) return;
+            result = await api(`${base}/kindle`, 'POST', { email: email.trim() });
+          }
+          if (result.method === 'app')
+            alert(`Handed ${result.filename} to the Send to Kindle app.`);
+          if (result.method === 'mail-draft')
+            alert(
+              `Mail draft opened, ${result.filename} attached to ${result.kindleEmail} — press Send.`
+            );
+          if (result.method === 'reveal')
+            alert(
+              `Built ${result.filename} — upload it at amazon.com/sendtokindle (file revealed).`
+            );
+        } catch (e) {
+          alert(e.message);
+        }
+      });
 
       /* ----- activity panel ----- */
       const CAT = {

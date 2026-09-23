@@ -534,6 +534,24 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('send to kindle', () => {
+    it('should choose a strategy and persist the kindle email', async () => {
+      const need = await api(`${p}/kindle`, 'POST', { dry_run: true });
+      expect(need.status).toBe(200);
+      expect(['app', 'mail-draft', 'reveal', 'need-email']).toContain(need.body.method);
+
+      const saved = await api(`${p}/kindle`, 'POST', {
+        dry_run: true,
+        email: 'writer_42@kindle.com'
+      });
+      expect(saved.body.kindleEmail).toBe('writer_42@kindle.com');
+      // Persisted: next dry run knows the address without resending it
+      const again = await api(`${p}/kindle`, 'POST', { dry_run: true });
+      expect(again.body.kindleEmail).toBe('writer_42@kindle.com');
+      expect(again.body.method).not.toBe('need-email');
+    });
+  });
+
   describe('global reviews', () => {
     it('should list reviews across projects with status filter', async () => {
       const ch = await api(`${p}/chapters`, 'POST', { title: 'Rev Ch' });

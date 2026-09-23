@@ -6,10 +6,13 @@
  */
 
 import { promises as fs } from 'fs';
+import { existsSync } from 'fs';
+import { execFile } from 'child_process';
+import { promisify } from 'util';
 import crypto from 'crypto';
 import path from 'path';
 import { z } from 'zod';
-import { defineOperation, OperationError } from './registry.js';
+import { defineOperation, OperationError, execute } from './registry.js';
 import { getDataDir, STAGES } from '../store.js';
 import { authenticate, getCredentialsPath, getTokenPath, hasGoogleClient } from '../auth.js';
 import { getAllMarkdownFiles, filterExcludedFiles, getFilesToBuild } from '../file-filter.js';
@@ -1094,6 +1097,65 @@ defineOperation({
   handler: ({ store }, { project_id }) => {
     const project = projectOf(store, project_id);
     return { markdown: buildAiReport(store, project) };
+  }
+});
+
+const execFileAsync = promisify(execFile);
+
+defineOperation({
+  name: 'kindle.send',
+  description:
+    "Send a built EPUB to the reader's Kindle, cloud-free: the Send to Kindle app when installed, else a Mail.app draft with the file attached to the saved kindle email (user presses Send), else reveal the file for the web uploader. Passing email saves it for next time.",
+  input: z.object({
+    project_id: id,
+    edition_id: id.optional(),
+    email: z.string().email().optional(),
+    dry_run: z.boolean().optional()
+  }),
+  handler: async (ctx, { project_id, edition_id, email, dry_run }) => {
+    const { store } = ctx;
+    if (email) store.setSetting('kindle_email', email);
+    const kindleEmail = email ?? store.getSetting('kindle_email');
+
+    const kindleApp =
+      process.platform === 'darwin' && existsSync('/Applications/Send to Kindle.app');
+    const canMail = process.platform === 'darwin' && !!kindleEmail;
+    const method = kindleApp
+      ? 'app'
+      : canMail
+        ? 'mail-draft'
+        : kindleEmail
+          ? 'reveal'
+          : 'need-email';
+    if (dry_run) return { method, kindleEmail: kindleEmail ?? null };
+    if (method === 'need-email') {
+      return { method, kindleEmail: null };
+    }
+
+    const built = await execute('export.project', ctx, { project_id, format: 'epub', edition_id });
+
+    if (method === 'app') {
+      await execFileAsync('open', ['-a', 'Send to Kindle', built.path]);
+      return { method, ...built, kindleEmail: kindleEmail ?? null };
+    }
+    if (method === 'mail-draft') {
+      const script = `tell application "Mail"
+  set msg to make new outgoing message with properties {subject:${JSON.stringify(built.filename)}, content:"Sent from draftsync.", visible:true}
+  tell msg to make new to recipient at end of to recipients with properties {address:${JSON.stringify(kindleEmail)}}
+  tell content of msg to make new attachment with properties {file name:POSIX file ${JSON.stringify(built.path)}} at after last paragraph
+  activate
+end tell`;
+      await execFileAsync('osascript', ['-e', script]);
+      return { method, ...built, kindleEmail };
+    }
+    // reveal: non-mac with a saved email — show the file for kindle.com/sendtokindle
+    if (process.platform === 'darwin') await execFileAsync('open', ['-R', built.path]);
+    return {
+      method: 'reveal',
+      ...built,
+      kindleEmail,
+      uploader: 'https://www.amazon.com/sendtokindle'
+    };
   }
 });
 
