@@ -160,54 +160,127 @@ defineOperation({
   }
 });
 
+/**
+ * Scan one project's chapter files: refresh stats, detect edits, record
+ * file_edited activities with line and word deltas
+ *
+ * @param {import('../store.js').Store} store - Open store
+ * @param {Object} project - Project row
+ * @returns {Promise<{scanned: number, changed: Array, missing: Array}>}
+ */
+async function scanProject(store, project) {
+  const changed = [];
+  const missing = [];
+  let scanned = 0;
+  for (const chapter of store.listChapters(project.id)) {
+    if (!chapter.file) continue;
+    let content;
+    try {
+      content = await fs.readFile(path.join(project.path, chapter.file), 'utf8');
+    } catch {
+      missing.push({ chapter_id: chapter.id, file: chapter.file });
+      continue;
+    }
+    scanned += 1;
+    const stats = analyzeMarkdown(content);
+    if (chapter.content_hash === stats.contentHash) continue;
+
+    const previous = store.getChapterText(chapter.id);
+    const wordsBefore = chapter.word_count;
+    store.updateChapterStats(chapter.id, stats);
+    store.setChapterText(chapter.id, content);
+    if (chapter.content_hash === null && previous === null) continue; // first analysis
+
+    const delta = diffStats(previous ?? '', content);
+    const entry = {
+      file: chapter.file,
+      linesAdded: delta.linesAdded,
+      linesRemoved: delta.linesRemoved,
+      wordCount: stats.wordCount,
+      wordDelta: wordsBefore == null ? null : stats.wordCount - wordsBefore
+    };
+    store.addActivity(project.id, { type: 'file_edited', chapterId: chapter.id, data: entry });
+    changed.push({ chapter_id: chapter.id, title: chapter.title, ...entry });
+  }
+  return { scanned, changed, missing };
+}
+
 defineOperation({
   name: 'project.scan',
   description:
-    'Scan chapter source files: refresh word count/excerpt (plain parsing, no AI) and detect edits since the last scan with line-diff change magnitude; records file_edited timeline activities',
+    'Scan chapter source files: refresh word count/excerpt (plain parsing, no AI) and detect edits since the last scan with line and word deltas; records file_edited timeline activities',
   input: z.object({ project_id: id }),
-  handler: async ({ store }, { project_id }) => {
-    const project = projectOf(store, project_id);
-    const changed = [];
-    const missing = [];
-    let scanned = 0;
-    for (const chapter of store.listChapters(project.id)) {
-      if (!chapter.file) continue;
-      let content;
-      try {
-        content = await fs.readFile(path.join(project.path, chapter.file), 'utf8');
-      } catch {
-        missing.push({ chapter_id: chapter.id, file: chapter.file });
-        continue;
+  handler: async ({ store }, { project_id }) => scanProject(store, projectOf(store, project_id))
+});
+
+defineOperation({
+  name: 'project.scan_all',
+  description:
+    'Scan every registered project for source-file edits — the ambient detection behind dashboard notification badges',
+  input: z.object({}),
+  handler: async ({ store }) => {
+    const results = [];
+    for (const project of store.listProjects()) {
+      const result = await scanProject(store, project);
+      if (result.changed.length > 0 || result.missing.length > 0) {
+        results.push({ project_id: project.id, project: project.name, ...result });
       }
-      scanned += 1;
-      const stats = analyzeMarkdown(content);
-      if (chapter.content_hash === stats.contentHash) continue;
-
-      const previous = store.getChapterText(chapter.id);
-      store.updateChapterStats(chapter.id, stats);
-      store.setChapterText(chapter.id, content);
-      if (chapter.content_hash === null && previous === null) continue; // first analysis
-
-      const delta = diffStats(previous ?? '', content);
-      store.addActivity(project.id, {
-        type: 'file_edited',
-        chapterId: chapter.id,
-        data: {
-          file: chapter.file,
-          linesAdded: delta.linesAdded,
-          linesRemoved: delta.linesRemoved,
-          wordCount: stats.wordCount
-        }
-      });
-      changed.push({
-        chapter_id: chapter.id,
-        title: chapter.title,
-        linesAdded: delta.linesAdded,
-        linesRemoved: delta.linesRemoved,
-        wordCount: stats.wordCount
-      });
     }
-    return { scanned, changed, missing };
+    return { projects: results };
+  }
+});
+
+defineOperation({
+  name: 'progress.summary',
+  description:
+    'Writing progress over a recent window (default 7 days): net words, chapters edited, tasks completed, reviews received, active days — per project or global',
+  input: z.object({
+    project_id: id.optional(),
+    days: z.coerce.number().int().min(1).max(90).optional()
+  }),
+  handler: ({ store }, { project_id, days = 7 }) => {
+    if (project_id) projectOf(store, project_id);
+    const since = store.db
+      .prepare(`SELECT datetime('now', '-' || ? || ' days') AS at`)
+      .get(days).at;
+    const rows = project_id
+      ? store.db
+          .prepare('SELECT * FROM activities WHERE project_id = ? AND created_at > ?')
+          .all(project_id, since)
+      : store.db.prepare('SELECT * FROM activities WHERE created_at > ?').all(since);
+
+    let wordsNet = 0;
+    let wordsAdded = 0;
+    const chaptersEdited = new Set();
+    const activeDays = new Set();
+    let tasksCompleted = 0;
+    let reviewsReceived = 0;
+    let chaptersAdded = 0;
+    for (const row of rows) {
+      const data = JSON.parse(row.data);
+      activeDays.add(String(row.created_at).slice(0, 10));
+      if (row.type === 'file_edited') {
+        if (row.chapter_id) chaptersEdited.add(row.chapter_id);
+        if (typeof data.wordDelta === 'number') {
+          wordsNet += data.wordDelta;
+          if (data.wordDelta > 0) wordsAdded += data.wordDelta;
+        }
+      }
+      if (row.type === 'task_completed') tasksCompleted += 1;
+      if (row.type === 'review_received') reviewsReceived += 1;
+      if (row.type === 'chapter_created') chaptersAdded += 1;
+    }
+    return {
+      days,
+      since,
+      wordsNet,
+      wordsAdded,
+      chaptersEdited: chaptersEdited.size,
+      tasksCompleted,
+      reviewsReceived,
+      chaptersAdded,
+      activeDays: activeDays.size
+    };
   }
 });
 

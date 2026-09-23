@@ -111,6 +111,35 @@
         padding: 1.2rem 1.5rem 2rem;
       }
 
+      /* This-week progress strip — quiet, one line */
+      .week {
+        display: flex;
+        align-items: baseline;
+        gap: 1.1rem;
+        flex-wrap: wrap;
+        color: var(--ink-soft);
+        font-size: 0.82rem;
+        padding: 0.55rem 0.9rem;
+        border: 1px solid var(--ink-faint);
+        border-radius: var(--radius-large);
+        background: var(--paper-raised);
+        margin-bottom: 1rem;
+      }
+      .week .lead {
+        font-size: 0.68rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+      }
+      .week b {
+        color: var(--ink);
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      .week .ic {
+        color: var(--infra);
+        margin-right: 0.25rem;
+      }
+
       /* Onboarding banner */
       .onboard {
         border: 1px solid var(--infra);
@@ -420,6 +449,7 @@
       const renderProjects = root => {
         const onboard = onboardCard();
         if (onboard) root.appendChild(onboard);
+        if (weekStripEl) root.appendChild(weekStripEl);
 
         const labels = [...new Set(projects.map(p => p.label).filter(Boolean))].sort();
         const filters = document.createElement('div');
@@ -796,6 +826,58 @@
         refreshUnseen();
       };
 
+      /* ---------- this week ---------- */
+      let weekStripEl = null;
+      const stat = (icon, value, label) => {
+        const span = document.createElement('span');
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'ic');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', `/assets/icons.svg#${icon}`);
+        svg.appendChild(use);
+        const b = document.createElement('b');
+        b.textContent = value;
+        span.append(svg, b, document.createTextNode(' ' + label));
+        return span;
+      };
+      const loadWeek = async () => {
+        const w = await api('/api/progress');
+        const parts = [];
+        if (w.wordsNet !== 0 || w.wordsAdded > 0) {
+          const sign = w.wordsNet > 0 ? '+' : '';
+          parts.push(stat('edit', `${sign}${w.wordsNet.toLocaleString()}`, 'words'));
+        }
+        if (w.chaptersEdited > 0) {
+          parts.push(
+            stat('doc-plus', w.chaptersEdited, `chapter${w.chaptersEdited === 1 ? '' : 's'} edited`)
+          );
+        }
+        if (w.tasksCompleted > 0) {
+          parts.push(
+            stat('square-check', w.tasksCompleted, `task${w.tasksCompleted === 1 ? '' : 's'} done`)
+          );
+        }
+        if (w.reviewsReceived > 0) {
+          parts.push(
+            stat('inbox', w.reviewsReceived, `review${w.reviewsReceived === 1 ? '' : 's'} in`)
+          );
+        }
+        if (w.activeDays > 0 && parts.length > 0) {
+          parts.push(stat('pulse', w.activeDays, `day${w.activeDays === 1 ? '' : 's'} active`));
+        }
+        if (parts.length === 0) {
+          weekStripEl = null;
+          return;
+        }
+        weekStripEl = document.createElement('div');
+        weekStripEl.className = 'week';
+        const lead = document.createElement('span');
+        lead.className = 'lead';
+        lead.textContent = 'This week';
+        weekStripEl.appendChild(lead);
+        for (const part of parts) weekStripEl.appendChild(part);
+      };
+
       /* ---------- boot ---------- */
       const load = async () => {
         projects = (await api('/api/projects')).projects.sort(
@@ -807,6 +889,14 @@
 
       (async () => {
         await loadGoogle();
+        // Ambient edit detection: scan every project, then load with the
+        // badge and week strip reflecting whatever changed on disk
+        try {
+          await api('/api/scan', 'POST');
+        } catch {
+          /* dashboard still renders without a scan */
+        }
+        await loadWeek();
         await load();
         refreshUnseen();
         const saved = localStorage.getItem('draftsync-home-panel');

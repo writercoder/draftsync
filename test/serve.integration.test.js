@@ -487,6 +487,53 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('progress and global scan', () => {
+    it('should record word deltas on edits and summarize the week', async () => {
+      await api(`${p}/import`, 'POST');
+      await api(`${p}/scan`, 'POST'); // baseline
+      writeFileSync(
+        join(projectDir, 'content', '01-opening.md'),
+        '# The Opening\n\nText.\n\nFive more words appear here now.\n'
+      );
+      const scan = await api(`${p}/scan`, 'POST');
+      expect(scan.body.changed[0].wordDelta).toBe(6);
+
+      const task = await api(`${p}/tasks`, 'POST', { text: 'progress task' });
+      await api(`${p}/tasks/${task.body.id}`, 'PATCH', { done: true });
+      await api(`${p}/reviews`, 'POST', {
+        chapter_id: scan.body.changed[0].chapter_id,
+        reviewer_name: 'R',
+        reviewer_email: 'r@example.com',
+        body: 'fine'
+      });
+
+      const week = await api(`${p}/progress`);
+      expect(week.body.days).toBe(7);
+      expect(week.body.wordsNet).toBe(6);
+      expect(week.body.chaptersEdited).toBe(1);
+      expect(week.body.tasksCompleted).toBe(1);
+      expect(week.body.reviewsReceived).toBe(1);
+      expect(week.body.activeDays).toBe(1);
+
+      const global = await api('/api/progress?days=30');
+      expect(global.body.days).toBe(30);
+      expect(global.body.wordsNet).toBe(6);
+    });
+
+    it('should scan all projects globally', async () => {
+      await api(`${p}/import`, 'POST');
+      await api(`${p}/scan`, 'POST'); // baseline snapshots
+      writeFileSync(
+        join(projectDir, 'content', '02-middle.md'),
+        'No heading here. But now with extra words.\n'
+      );
+      const { status, body } = await api('/api/scan', 'POST');
+      expect(status).toBe(200);
+      const hit = body.projects.find(x => x.project === 'my-novel');
+      expect(hit.changed.some(c => c.file === 'content/02-middle.md')).toBe(true);
+    });
+  });
+
   describe('read state and notifications', () => {
     it('should count unseen, mark seen, and expose seenAt in the stream', async () => {
       // Before any cursor exists, everything is calm (nothing "new")

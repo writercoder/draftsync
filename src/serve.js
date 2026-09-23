@@ -133,6 +133,15 @@ export function createDraftsyncServer({ store }) {
           await run('activity.stream', { limit: url.searchParams.get('limit') || undefined })
         );
       }
+      if (req.method === 'POST' && p === '/api/scan') {
+        return send(200, await run('project.scan_all'));
+      }
+      if (req.method === 'GET' && p === '/api/progress') {
+        return send(
+          200,
+          await run('progress.summary', { days: url.searchParams.get('days') || undefined })
+        );
+      }
       if (req.method === 'GET' && p === '/api/activity/unseen') {
         return send(200, await run('activity.unseen'));
       }
@@ -344,6 +353,15 @@ export function createDraftsyncServer({ store }) {
       }
       if ((x = r(/^\/reviews\/(\d+)$/)) && req.method === 'DELETE') {
         return send(200, await run('review.delete', { project_id, review_id: x[1] }));
+      }
+      if (req.method === 'GET' && route === '/progress') {
+        return send(
+          200,
+          await run('progress.summary', {
+            project_id,
+            days: url.searchParams.get('days') || undefined
+          })
+        );
       }
       if (req.method === 'GET' && route === '/activity/unseen') {
         return send(200, await run('activity.unseen', { project_id }));
