@@ -7,7 +7,17 @@
     <link rel="icon" href="/assets/heron.svg" />
     <link rel="stylesheet" href="/assets/tokens.css" />
     <link rel="stylesheet" href="/assets/draftsync.css" />
+    <script src="/assets/feed.js" defer></script>
     <style>
+      body {
+        height: 100vh;
+        display: flex;
+        flex-direction: column;
+      }
+      .layout > main {
+        flex: 1;
+        overflow-y: auto;
+      }
       header .desc {
         color: var(--ink-soft);
         font-size: 0.85rem;
@@ -84,18 +94,40 @@
         <a id="dl-docx" download>DOCX</a>
         <a id="dl-pdf" download>PDF</a>
       </span>
+      <button id="tasks-toggle">
+        <svg class="ic"><use href="/assets/icons.svg#square" /></svg>
+        <span id="tasks-toggle-label">Tasks</span>
+      </button>
+      <button id="panel-toggle">
+        <svg class="ic"><use href="/assets/icons.svg#pulse" /></svg>
+        Activity
+      </button>
     </header>
-    <main>
-      <h2>Stories, in order</h2>
-      <div id="members"></div>
-      <h2>Add a project</h2>
-      <div id="available"></div>
-      <h2 style="display: flex; justify-content: space-between">
-        <span>Editions</span>
-        <button id="ed-new" style="text-transform: none; letter-spacing: 0">New edition</button>
-      </h2>
-      <div id="editions"></div>
-    </main>
+    <div class="layout">
+      <main>
+        <h2>Stories, in order</h2>
+        <div id="members"></div>
+        <h2>Add a project</h2>
+        <div id="available"></div>
+        <h2 style="display: flex; justify-content: space-between">
+          <span>Editions</span>
+          <button id="ed-new" style="text-transform: none; letter-spacing: 0">New edition</button>
+        </h2>
+        <div id="editions"></div>
+      </main>
+      <aside class="apanel" id="tpanel">
+        <div class="apanel-head">
+          <strong style="font-size: 0.85rem">Open tasks — this collection</strong>
+        </div>
+        <div class="apanel-list" id="tpanel-list"></div>
+      </aside>
+      <aside class="apanel" id="apanel">
+        <div class="apanel-head">
+          <strong style="font-size: 0.85rem">Activity — this collection</strong>
+        </div>
+        <div class="apanel-list" id="apanel-list"></div>
+      </aside>
+    </div>
 
     <script>
       const collectionId = Number(location.pathname.split('/')[2]);
@@ -271,7 +303,76 @@
         }
       });
 
-      load();
+      /* ---- collection-scoped flyouts ---- */
+      const setPanelMode = mode => {
+        document.body.classList.toggle('panel-activity', mode === 'activity');
+        document.body.classList.toggle('panel-tasks', mode === 'tasks');
+        localStorage.setItem('draftsync-col-panel', mode || '');
+        if (mode === 'activity') loadStream();
+        if (mode === 'tasks') renderTasksPanel();
+      };
+      const panelMode = () =>
+        document.body.classList.contains('panel-activity')
+          ? 'activity'
+          : document.body.classList.contains('panel-tasks')
+            ? 'tasks'
+            : null;
+      document
+        .getElementById('panel-toggle')
+        .addEventListener('click', () =>
+          setPanelMode(panelMode() === 'activity' ? null : 'activity')
+        );
+      document
+        .getElementById('tasks-toggle')
+        .addEventListener('click', () => setPanelMode(panelMode() === 'tasks' ? null : 'tasks'));
+
+      const loadStream = async () => {
+        const { stream } = await api(`/api/activity?collection=${collectionId}&limit=60`);
+        dsFeed.renderStream(document.getElementById('apanel-list'), stream, { seenAt: null });
+      };
+
+      const renderTasksPanel = async () => {
+        const { tasks } = await api('/api/tasks');
+        const memberIds = new Set(state.projects.map(prj => prj.id));
+        const mine = tasks.filter(t => memberIds.has(t.projectId));
+        document.getElementById('tasks-toggle-label').textContent =
+          mine.length > 0 ? `Tasks (${mine.length})` : 'Tasks';
+        const list = document.getElementById('tpanel-list');
+        list.innerHTML = '';
+        for (const t of mine) {
+          const row = document.createElement('div');
+          row.className = 'ptask';
+          const check = document.createElement('input');
+          check.type = 'checkbox';
+          check.addEventListener('change', async () => {
+            await api(`/api/p/${t.projectId}/tasks/${t.id}`, 'PATCH', { done: true });
+            renderTasksPanel();
+          });
+          const body = document.createElement('div');
+          body.className = 'body';
+          const txt = document.createElement('span');
+          txt.className = 'txt';
+          txt.textContent = t.text;
+          const where = document.createElement('a');
+          where.className = 'where';
+          where.href = `/p/${t.projectId}`;
+          where.textContent = t.projectName + (t.chapterTitle ? ` · ${t.chapterTitle}` : '');
+          body.append(txt, where);
+          row.append(check, body);
+          list.appendChild(row);
+        }
+        if (mine.length === 0) {
+          list.innerHTML =
+            '<div class="ptask"><span class="txt" style="color: var(--muted)">No open tasks in this collection.</span></div>';
+        }
+      };
+
+      (async () => {
+        await load();
+        renderTasksPanel();
+        const saved = localStorage.getItem('draftsync-col-panel');
+        if (saved) setPanelMode(saved);
+      })();
     </script>
   </body>
 </html>
