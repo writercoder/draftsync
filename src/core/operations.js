@@ -168,7 +168,7 @@ defineOperation({
  * @param {Object} project - Project row
  * @returns {Promise<{scanned: number, changed: Array, missing: Array}>}
  */
-async function scanProject(store, project) {
+export async function scanProject(store, project) {
   const changed = [];
   const missing = [];
   let scanned = 0;

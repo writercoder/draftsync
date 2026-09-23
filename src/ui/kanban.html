@@ -1447,6 +1447,8 @@
         refreshUnseen();
         if (panelMode() === 'activity') loadStream();
         if (panelMode() === 'tasks') renderTasksPanel();
+        // The server watches the filesystem; keep the badge current
+        setInterval(refreshUnseen, 30000);
       })();
     </script>
   </body>

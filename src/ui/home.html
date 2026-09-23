@@ -901,6 +901,8 @@
         refreshUnseen();
         const saved = localStorage.getItem('draftsync-home-panel');
         if (saved) setPanelMode(saved);
+        // The server watches the filesystem; keep the badge current
+        setInterval(refreshUnseen, 30000);
       })();
     </script>
   </body>

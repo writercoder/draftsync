@@ -16,7 +16,8 @@ import { spawn } from 'child_process';
 import chalk from 'chalk';
 import { openStore, getDataDir } from './store.js';
 import { execute, buildOpenApiDocument, OperationError } from './core/registry.js';
-import './core/operations.js';
+import { scanProject } from './core/operations.js';
+import { startWatcher } from './core/watcher.js';
 
 const UI_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), 'ui');
 
@@ -426,6 +427,19 @@ export async function serveCommand(options = {}) {
   const store = openStore();
   const server = createDraftsyncServer({ store });
 
+  // The serve process is the engine: catch up on startup, then hold
+  // native filesystem watches so edits surface without any page open
+  execute('project.scan_all', { store }).catch(() => {});
+  const watcher = startWatcher({
+    store,
+    scanProject,
+    onChange: (project, result) => {
+      const files = result.changed.map(c => c.file).join(', ');
+      console.log(chalk.gray(`  ✎ ${project.name}: ${files}`));
+    }
+  });
+  server.on('close', () => watcher.stop());
+
   let startPath = '/';
   if (await looksLikeProject(process.cwd())) {
     const project = store.getOrCreateProject(process.cwd());
@@ -439,6 +453,7 @@ export async function serveCommand(options = {}) {
     console.log(chalk.gray(`  Opening ${url}`));
     console.log(chalk.gray(`  API: http://localhost:${port}/api/openapi.json`));
     console.log(chalk.gray(`  Data: ${path.join(getDataDir(), 'draftsync.db')}`));
+    console.log(chalk.gray(`  Watching ${watcher.watchedCount()} project content tree(s)`));
     console.log(chalk.gray('  Press Ctrl+C to stop\n'));
     const opener =
       process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
