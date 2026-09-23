@@ -534,6 +534,33 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('global reviews', () => {
+    it('should list reviews across projects with status filter', async () => {
+      const ch = await api(`${p}/chapters`, 'POST', { title: 'Rev Ch' });
+      await api(`${p}/reviews/request`, 'POST', {
+        chapter_id: ch.body.id,
+        reviewer_name: 'Open R',
+        reviewer_email: 'open@example.com',
+        request_note: 'the ending'
+      });
+      await api(`${p}/reviews`, 'POST', {
+        chapter_id: ch.body.id,
+        reviewer_name: 'Done R',
+        reviewer_email: 'done@example.com',
+        body: 'received words'
+      });
+
+      const all = await api('/api/reviews');
+      expect(all.body.reviews).toHaveLength(2);
+      expect(all.body.reviews[0].projectName).toBe('my-novel');
+
+      const open = await api('/api/reviews?status=sent');
+      expect(open.body.reviews).toHaveLength(1);
+      expect(open.body.reviews[0].reviewer_name).toBe('Open R');
+      expect(open.body.reviews[0].chapterTitle).toBe('Rev Ch');
+    });
+  });
+
   describe('scoped activity stream', () => {
     it('should filter by collection membership and edition targets', async () => {
       // Two projects; only one joins the collection

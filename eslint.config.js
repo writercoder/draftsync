@@ -33,5 +33,14 @@ export default [
       'prefer-const': 'error',
       'no-var': 'error'
     }
+  },
+  {
+    // Browser scripts served to the web UI
+    files: ['src/ui/assets/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser
+      }
+    }
   }
 ];

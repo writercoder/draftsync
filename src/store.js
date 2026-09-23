@@ -1245,6 +1245,23 @@ export class Store {
   }
 
   /**
+   * Reviews across all projects, newest first, with all names
+   *
+   * @param {string} [status] - Filter: 'sent' | 'received'
+   * @returns {Array<Object>} Review rows with projectName/chapterTitle/editionName
+   */
+  listAllReviews(status = null) {
+    const where = status ? 'WHERE r.status = ?' : '';
+    const query = `SELECT r.*, p.name AS projectName, c.title AS chapterTitle, e.name AS editionName
+         FROM reviews r
+         JOIN projects p ON p.id = r.project_id
+         LEFT JOIN chapters c ON c.id = r.chapter_id
+         LEFT JOIN editions e ON e.id = r.edition_id
+         ${where} ORDER BY r.id DESC`;
+    return status ? this.db.prepare(query).all(status) : this.db.prepare(query).all();
+  }
+
+  /**
    * Delete a review
    *
    * @param {number} id - Review ID

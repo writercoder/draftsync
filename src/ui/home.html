@@ -293,6 +293,9 @@
       <button class="nav-item active" data-tab="projects">
         <svg class="ic"><use href="/assets/icons.svg#doc-plus" /></svg> Projects
       </button>
+      <button class="nav-item" data-tab="reviews">
+        <svg class="ic"><use href="/assets/icons.svg#plane" /></svg> Reviews
+      </button>
       <button class="nav-item" data-tab="collections">
         <svg class="ic"><use href="/assets/icons.svg#folder-link" /></svg> Collections
       </button>
@@ -372,8 +375,12 @@
         for (const item of document.querySelectorAll('.nav-item[data-tab]')) {
           item.classList.toggle('active', item.dataset.tab === next);
         }
-        document.getElementById('tab-title').textContent =
-          next === 'projects' ? 'Projects' : next === 'collections' ? 'Collections' : 'Editions';
+        document.getElementById('tab-title').textContent = {
+          projects: 'Projects',
+          reviews: 'Reviews',
+          collections: 'Collections',
+          editions: 'Editions'
+        }[next];
         render();
       };
       for (const item of document.querySelectorAll('.nav-item[data-tab]')) {
@@ -655,10 +662,70 @@
         }
       };
 
+      const renderReviewsTab = async root => {
+        const { reviews } = await api('/api/reviews');
+        const open = reviews.filter(r => r.status === 'sent');
+        const received = reviews.filter(r => r.status === 'received').slice(0, 10);
+
+        const head = document.createElement('h2');
+        head.textContent = `Awaiting feedback (${open.length})`;
+        head.style.margin = '0 0 0.6rem';
+        root.appendChild(head);
+        const projectFor = r => projects.find(p => p.id === r.project_id);
+        const reviewRow = (r, muted) => {
+          const row = document.createElement('div');
+          row.className = 'row';
+          if (muted) row.style.opacity = '0.75';
+          const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+          icon.setAttribute('class', 'ic');
+          icon.setAttribute('style', 'color: var(--infra); align-self: center');
+          const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+          use.setAttribute('href', `/assets/icons.svg#${r.status === 'sent' ? 'plane' : 'inbox'}`);
+          icon.appendChild(use);
+          const who = document.createElement('span');
+          const strongEl = document.createElement('strong');
+          strongEl.textContent = r.reviewer_name;
+          who.appendChild(strongEl);
+          const target = document.createElement('a');
+          target.className = 'grow';
+          const project = projectFor(r);
+          target.href = project ? `/p/${project.id}` : '#';
+          target.style.textDecoration = 'none';
+          target.textContent =
+            (r.chapterTitle ? `chapter: ${r.chapterTitle}` : `edition: ${r.editionName}`) +
+            ` — ${r.projectName}` +
+            (r.request_note ? ` · asked: ${r.request_note}` : '');
+          const when = document.createElement('span');
+          when.className = 'count';
+          when.textContent =
+            r.status === 'sent'
+              ? `sent ${String(r.sent_at || '').slice(0, 10)}`
+              : `received ${String(r.received_at || '').slice(0, 10)}`;
+          row.append(icon, who, target, when);
+          return row;
+        };
+        for (const r of open) root.appendChild(reviewRow(r, false));
+        if (open.length === 0) {
+          const empty = document.createElement('div');
+          empty.className = 'empty';
+          empty.textContent =
+            'Nothing out for review. Send a chapter or an edition from its board.';
+          root.appendChild(empty);
+        }
+        if (received.length > 0) {
+          const h2 = document.createElement('h2');
+          h2.textContent = 'Recently received';
+          h2.style.margin = '1.6rem 0 0.6rem';
+          root.appendChild(h2);
+          for (const r of received) root.appendChild(reviewRow(r, true));
+        }
+      };
+
       const render = async () => {
         const root = document.getElementById('content');
         root.innerHTML = '';
         if (tab === 'projects') renderProjects(root);
+        if (tab === 'reviews') await renderReviewsTab(root);
         if (tab === 'collections') await renderCollections(root);
         if (tab === 'editions') await renderEditionsTab(root);
       };

@@ -377,10 +377,11 @@ body.panel-tasks #tasks-toggle {
 }
 .st-item .when {
   color: var(--ink-soft);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  font-family: var(--font-mono);
+  margin-left: auto;
+  align-self: center;
 }
 .st-item .ic {
   color: var(--infra);

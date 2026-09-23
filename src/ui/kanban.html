@@ -1303,7 +1303,7 @@
           const what = document.createElement('span');
           what.className = 'what';
           for (const node of streamNodes(row)) what.appendChild(node);
-          item.append(icon, when, what);
+          item.append(icon, what, when);
           list.appendChild(item);
         }
       };

@@ -775,6 +775,14 @@ defineOperation({
 });
 
 defineOperation({
+  name: 'review.list_all',
+  description:
+    'Reviews across every project (optionally filtered by status: sent = awaiting feedback, received) with project and target names',
+  input: z.object({ status: z.enum(['sent', 'received']).optional() }),
+  handler: ({ store }, { status }) => ({ reviews: store.listAllReviews(status ?? null) })
+});
+
+defineOperation({
   name: 'review.list',
   description: "List a project's reviews with target chapter/edition names",
   input: z.object({ project_id: id }),

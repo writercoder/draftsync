@@ -155,6 +155,12 @@ export function createDraftsyncServer({ store }) {
       if (req.method === 'POST' && p === '/api/activity/seen') {
         return send(200, await run('activity.mark_seen'));
       }
+      if (req.method === 'GET' && p === '/api/reviews') {
+        return send(
+          200,
+          await run('review.list_all', { status: url.searchParams.get('status') || undefined })
+        );
+      }
       if (req.method === 'GET' && p === '/api/editions') {
         return send(200, await run('edition.list_all'));
       }
