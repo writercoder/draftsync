@@ -487,6 +487,41 @@ describe('Serve Integration Tests', () => {
     });
   });
 
+  describe('read state and notifications', () => {
+    it('should count unseen, mark seen, and expose seenAt in the stream', async () => {
+      // Before any cursor exists, everything is calm (nothing "new")
+      await api(`${p}/chapters`, 'POST', { title: 'Unread Ch' });
+      const fresh = await api(`${p}/activity/unseen`);
+      expect(fresh.body).toEqual({ count: 0, seenAt: null });
+
+      const seen = await api(`${p}/activity/seen`, 'POST');
+      expect(seen.body.seenAt).toBeTruthy();
+      const after = await api(`${p}/activity/unseen`);
+      expect(after.body.count).toBe(0);
+
+      // New event after marking seen counts again and stream carries seenAt
+      // (cursor is subsecond; event rows are second-precision, so cross
+      // the second boundary before creating the next event)
+      await new Promise(r => setTimeout(r, 1100));
+      await api(`${p}/tasks`, 'POST', { text: 'post-seen task' });
+      const again = await api(`${p}/activity/unseen`);
+      expect(again.body.count).toBeGreaterThan(0);
+      const stream = await api(`${p}/activity`);
+      expect(stream.body.seenAt).toBe(seen.body.seenAt);
+
+      // Global scope has its own independent cursor (calm until first mark)
+      expect((await api('/api/activity/unseen')).body.count).toBe(0);
+      await api('/api/activity/seen', 'POST');
+      await new Promise(r => setTimeout(r, 1100));
+      await api(`${p}/tasks`, 'POST', { text: 'global-scope task' });
+      expect((await api('/api/activity/unseen')).body.count).toBeGreaterThan(0);
+      // Project cursor unaffected by the global mark: still counts its own
+      expect((await api(`${p}/activity/unseen`)).body.count).toBeGreaterThan(0);
+      await api('/api/activity/seen', 'POST');
+      expect((await api('/api/activity/unseen')).body.count).toBe(0);
+    });
+  });
+
   describe('activity stream', () => {
     it('should merge activities and AI events, newest first', async () => {
       const chapter = await api(`${p}/chapters`, 'POST', { title: 'Ch S' });

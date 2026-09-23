@@ -133,6 +133,12 @@ export function createDraftsyncServer({ store }) {
           await run('activity.stream', { limit: url.searchParams.get('limit') || undefined })
         );
       }
+      if (req.method === 'GET' && p === '/api/activity/unseen') {
+        return send(200, await run('activity.unseen'));
+      }
+      if (req.method === 'POST' && p === '/api/activity/seen') {
+        return send(200, await run('activity.mark_seen'));
+      }
       if (req.method === 'GET' && p === '/api/editions') {
         return send(200, await run('edition.list_all'));
       }
@@ -338,6 +344,12 @@ export function createDraftsyncServer({ store }) {
       }
       if ((x = r(/^\/reviews\/(\d+)$/)) && req.method === 'DELETE') {
         return send(200, await run('review.delete', { project_id, review_id: x[1] }));
+      }
+      if (req.method === 'GET' && route === '/activity/unseen') {
+        return send(200, await run('activity.unseen', { project_id }));
+      }
+      if (req.method === 'POST' && route === '/activity/seen') {
+        return send(200, await run('activity.mark_seen', { project_id }));
       }
       if (req.method === 'GET' && route === '/activity') {
         return send(

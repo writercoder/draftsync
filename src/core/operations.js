@@ -797,7 +797,65 @@ defineOperation({
     ]
       .sort((x, y) => String(y.at ?? '').localeCompare(String(x.at ?? '')))
       .slice(0, limit);
-    return { stream };
+    return { stream, seenAt: store.getSetting(seenKey(project_id)) };
+  }
+});
+
+/** Settings key for the activity seen-cursor of a scope */
+function seenKey(projectId) {
+  return projectId ? `activity_seen:${projectId}` : 'activity_seen:global';
+}
+
+/**
+ * Current timestamp for the seen-cursor, with subsecond precision so a
+ * cursor set now sorts after every existing second-precision event row.
+ * (Events landing within the same second after marking seen can be
+ * missed — a ≤1s window, acceptable for a single-user app.)
+ */
+function nowStamp(store) {
+  return store.db.prepare("SELECT datetime('now', 'subsec') AS at").get().at;
+}
+
+defineOperation({
+  name: 'activity.mark_seen',
+  description:
+    'Mark the activity stream as read for a scope (a project, or global when project_id is omitted) — moves the seen-cursor to now',
+  input: z.object({ project_id: id.optional() }),
+  handler: ({ store }, { project_id }) => {
+    if (project_id) projectOf(store, project_id);
+    const at = nowStamp(store);
+    store.setSetting(seenKey(project_id), at);
+    return { seenAt: at };
+  }
+});
+
+defineOperation({
+  name: 'activity.unseen',
+  description:
+    'Count of activity-stream items newer than the seen-cursor for a scope — the notification badge number',
+  input: z.object({ project_id: id.optional() }),
+  handler: ({ store }, { project_id }) => {
+    if (project_id) projectOf(store, project_id);
+    const seenAt = store.getSetting(seenKey(project_id));
+    // No cursor yet (never opened the panel): calm, nothing counts as new
+    if (!seenAt) return { count: 0, seenAt: null };
+    const acts = project_id
+      ? store.db
+          .prepare('SELECT COUNT(*) AS n FROM activities WHERE project_id = ? AND created_at > ?')
+          .get(project_id, seenAt).n
+      : store.db.prepare('SELECT COUNT(*) AS n FROM activities WHERE created_at > ?').get(seenAt).n;
+    const ai = project_id
+      ? store.db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM ai_events WHERE project_id = ? AND COALESCE(occurred_at, created_at) > ?'
+          )
+          .get(project_id, seenAt).n
+      : store.db
+          .prepare(
+            'SELECT COUNT(*) AS n FROM ai_events WHERE COALESCE(occurred_at, created_at) > ?'
+          )
+          .get(seenAt).n;
+    return { count: acts + ai, seenAt: seenAt || null };
   }
 });
 

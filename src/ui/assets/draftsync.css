@@ -313,23 +313,44 @@ body.panel-tasks #tasks-toggle {
 }
 .ptask {
   display: flex;
-  gap: 0.5rem;
-  align-items: baseline;
-  padding: 0.35rem 0;
+  gap: 0.55rem;
+  align-items: flex-start;
+  padding: 0.45rem 0;
   border-bottom: 1px solid var(--ink-faint);
   font-size: 0.85rem;
+}
+.ptask input[type='checkbox'] {
+  margin-top: 0.2rem;
+  flex: none;
+}
+.ptask .body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 .ptask.done .txt {
   text-decoration: line-through;
   color: var(--ink-soft);
 }
 .ptask .txt {
-  flex: 1;
+  line-height: 1.4;
 }
 .ptask .where {
-  color: var(--ink-soft);
-  font-size: 0.7rem;
+  color: var(--infra);
+  font-size: 0.72rem;
+  text-decoration: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ptask .where:hover {
+  text-decoration: underline;
+}
+.ptask > button {
+  flex: none;
+  margin-top: 0.1rem;
 }
 .ptask button {
   font-size: 0.7rem;
@@ -390,4 +411,40 @@ body.panel-tasks #tasks-toggle {
 }
 .st-item .warn {
   color: var(--ai-orange);
+}
+
+/* Unread state in the activity feed */
+.st-item.new {
+  background: var(--infra-wash);
+  border-radius: var(--radius);
+  padding-left: 0.35rem;
+  padding-right: 0.35rem;
+  margin: 0 -0.35rem;
+}
+.st-new-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--infra);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  margin: 0.6rem 0 0.2rem;
+}
+.st-new-divider::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--infra);
+  opacity: 0.35;
+}
+.badge {
+  min-width: 1.1rem;
+  text-align: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--paper-raised);
+  background: var(--infra);
+  border-radius: 999px;
+  padding: 0.05rem 0.3rem;
 }

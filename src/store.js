@@ -176,6 +176,10 @@ export function openStore(dataDir = getDataDir()) {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_activities_project ON activities(project_id, id);
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS collection_edition_projects (
       edition_id INTEGER NOT NULL REFERENCES collection_editions(id) ON DELETE CASCADE,
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -1028,6 +1032,31 @@ export class Store {
     });
     replace();
     return this.listCollectionEditionProjects(editionId);
+  }
+
+  /**
+   * Get a settings value
+   *
+   * @param {string} key - Setting key
+   * @returns {string|null} Stored value or null
+   */
+  getSetting(key) {
+    return this.db.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value ?? null;
+  }
+
+  /**
+   * Set a settings value
+   *
+   * @param {string} key - Setting key
+   * @param {string} value - Value to store
+   */
+  setSetting(key, value) {
+    this.db
+      .prepare(
+        `INSERT INTO settings (key, value) VALUES (?, ?)
+         ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+      )
+      .run(key, value);
   }
 
   /**

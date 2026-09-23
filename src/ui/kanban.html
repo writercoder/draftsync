@@ -341,7 +341,7 @@
       </button>
       <button id="panel-toggle">
         <svg class="ic"><use href="/assets/icons.svg#pulse" /></svg>
-        Activity
+        Activity <span class="badge" id="activity-badge" style="display: none"></span>
       </button>
     </header>
     <div class="layout">
@@ -1264,7 +1264,21 @@
           return;
         }
         let currentDay = null;
+        let dividerPlaced = false;
         for (const row of rows) {
+          const isNew = streamSeenAt && String(row.at ?? '') > streamSeenAt;
+          if (
+            !isNew &&
+            !dividerPlaced &&
+            streamSeenAt &&
+            rows.some(r => String(r.at ?? '') > streamSeenAt)
+          ) {
+            const divider = document.createElement('div');
+            divider.className = 'st-new-divider';
+            divider.textContent = 'earlier';
+            list.appendChild(divider);
+            dividerPlaced = true;
+          }
           const day = dayLabel(row.at);
           if (day !== currentDay) {
             currentDay = day;
@@ -1274,7 +1288,7 @@
             list.appendChild(head);
           }
           const item = document.createElement('div');
-          item.className = 'st-item';
+          item.className = 'st-item' + (isNew ? ' new' : '');
           item.title = row.kind.replace(/_/g, ' ');
           const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           icon.setAttribute('class', 'ic' + (CAT[row.kind] === 'ai' ? ' ai' : ''));
@@ -1322,16 +1336,19 @@
             renderTasksPanel();
             load();
           });
+          const body = document.createElement('div');
+          body.className = 'body';
           const txt = document.createElement('span');
           txt.className = 'txt';
           txt.textContent = t.text;
-          row.append(check, txt);
+          body.appendChild(txt);
           if (t.chapter_id && chapterTitle(t.chapter_id)) {
             const where = document.createElement('span');
             where.className = 'where';
             where.textContent = chapterTitle(t.chapter_id);
-            row.appendChild(where);
+            body.appendChild(where);
           }
+          row.append(check, body);
           const del = document.createElement('button');
           del.textContent = '×';
           del.addEventListener('click', async () => {
@@ -1362,9 +1379,20 @@
         }
       };
 
+      let streamSeenAt = null;
+      const refreshUnseen = async () => {
+        const { count } = await api(`${base}/activity/unseen`);
+        const badge = document.getElementById('activity-badge');
+        badge.style.display = count > 0 ? '' : 'none';
+        badge.textContent = count;
+      };
       const loadStream = async () => {
-        streamRows = (await api(`${base}/activity`)).stream;
+        const res = await api(`${base}/activity`);
+        streamRows = res.stream;
+        streamSeenAt = res.seenAt;
         renderStream();
+        await api(`${base}/activity/seen`, 'POST');
+        refreshUnseen();
       };
 
       const setPanelMode = mode => {
@@ -1416,6 +1444,7 @@
         }
         load();
         refreshMenuCounts();
+        refreshUnseen();
         if (panelMode() === 'activity') loadStream();
         if (panelMode() === 'tasks') renderTasksPanel();
       })();

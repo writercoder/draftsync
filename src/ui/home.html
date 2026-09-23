@@ -294,7 +294,7 @@
         </button>
         <button id="panel-toggle">
           <svg class="ic"><use href="/assets/icons.svg#pulse" /></svg>
-          Activity
+          Activity <span class="badge" id="activity-badge" style="display: none"></span>
         </button>
       </div>
       <div class="layout">
@@ -661,16 +661,17 @@
             await api(`/api/p/${t.projectId}/tasks/${t.id}`, 'PATCH', { done: true });
             renderTasksPanel();
           });
+          const body = document.createElement('div');
+          body.className = 'body';
           const txt = document.createElement('span');
           txt.className = 'txt';
           txt.textContent = t.text;
           const where = document.createElement('a');
           where.className = 'where';
           where.href = `/p/${t.projectId}`;
-          where.style.color = 'var(--infra)';
-          where.style.textDecoration = 'none';
           where.textContent = t.projectName + (t.chapterTitle ? ` · ${t.chapterTitle}` : '');
-          row.append(check, txt, where);
+          body.append(txt, where);
+          row.append(check, body);
           list.appendChild(row);
         }
         if (tasks.length === 0) {
@@ -728,12 +729,28 @@
             return row.kind;
         }
       };
+      const refreshUnseen = async () => {
+        const { count } = await api('/api/activity/unseen');
+        const badge = document.getElementById('activity-badge');
+        badge.style.display = count > 0 ? '' : 'none';
+        badge.textContent = count;
+      };
+
       const loadStream = async () => {
-        const { stream } = await api('/api/activity?limit=60');
+        const { stream, seenAt } = await api('/api/activity?limit=60');
         const list = document.getElementById('apanel-list');
         list.innerHTML = '';
         let currentDay = null;
+        let dividerPlaced = false;
         for (const row of stream) {
+          const isNew = seenAt && String(row.at ?? '') > seenAt;
+          if (!isNew && !dividerPlaced && seenAt && stream.some(r => String(r.at ?? '') > seenAt)) {
+            const divider = document.createElement('div');
+            divider.className = 'st-new-divider';
+            divider.textContent = 'earlier';
+            list.appendChild(divider);
+            dividerPlaced = true;
+          }
           const day = dayLabel(row.at);
           if (day !== currentDay) {
             currentDay = day;
@@ -743,7 +760,7 @@
             list.appendChild(head);
           }
           const item = document.createElement('div');
-          item.className = 'st-item';
+          item.className = 'st-item' + (isNew ? ' new' : '');
           item.title = row.kind.replace(/_/g, ' ');
           const icon = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
           icon.setAttribute('class', 'ic' + (row.kind === 'ai_event' ? ' ai' : ''));
@@ -775,6 +792,8 @@
           item.append(icon, what);
           list.appendChild(item);
         }
+        await api('/api/activity/seen', 'POST');
+        refreshUnseen();
       };
 
       /* ---------- boot ---------- */
@@ -789,6 +808,7 @@
       (async () => {
         await loadGoogle();
         await load();
+        refreshUnseen();
         const saved = localStorage.getItem('draftsync-home-panel');
         if (saved) setPanelMode(saved);
       })();
